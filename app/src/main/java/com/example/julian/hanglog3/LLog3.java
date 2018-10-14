@@ -43,6 +43,7 @@ import java.util.Date;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
+import com.example.julian.hanglog3.GraphPlot;
 
 // Isolated class with its management and output
 class ReadSensor implements SensorEventListener, LocationListener {
@@ -140,7 +141,7 @@ class RecUDP extends Thread {
 
     public RecUDP(Queue<String> lphonesensorqueue, LLog3 lllog3) {
         phonesensorqueue = lphonesensorqueue;
-        //act = lact;llog3 = lllog3;
+        llog3 = lllog3;
         long mstampsensor0 = 0;
 
         Log.i("hhanglog22", "RecUDP");
@@ -204,16 +205,17 @@ class RecUDP extends Thread {
             fostreamlines++;
         long mstamp = System.currentTimeMillis();
         if (mstamp > mstamp0) {
-            final String lText = String.format("(%d,%d) ", fostreamlines, fostreamlinesP) + new String(data, 0, leng);
+            final String dstring = new String(data, 0, leng);
+            final String lText = String.format("(%d,%d) ", fostreamlines, fostreamlinesP) + dstring;
             //Log.i("hhanglogD", lText);
             llog3.runOnUiThread(new Runnable() { // need to run settext on main UI thread only
                 @Override
                 public void run() {
                     llog3.epicwords.setText(lText);
-                    llog3.drawtilty();
+                    llog3.drawtilty(dstring);
                 }
             });
-            mstamp0 = mstamp + 1000;
+            mstamp0 = mstamp + 250;
         }
         FileOutputStream lfostream = fostream; // protect null pointers from thread conditions
         if (lfostream != null)
@@ -276,9 +278,7 @@ public class LLog3 extends AppCompatActivity {
     RecUDP recudp;
     FileOutputStream fostream;
     ImageView tiltyview;
-    Canvas tiltycanvas = null;
-    Bitmap mBitmap = null;
-    Paint mPaint = new Paint();
+    GraphPlot graphplot = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -315,7 +315,6 @@ public class LLog3 extends AppCompatActivity {
                 //outmonitor.append(str);
                 if (recudp != null)
                     recudp.msgtosend = str;
-                drawtilty();
             }
         });
 
@@ -323,23 +322,13 @@ public class LLog3 extends AppCompatActivity {
     }
 
     float ang = 0;
-    void drawtilty() {
-        int vwidth = tiltyview.getWidth();
-        int vheight = tiltyview.getHeight();
-        if (tiltycanvas == null) {
-            mBitmap = Bitmap.createBitmap(vwidth, vheight, Bitmap.Config.ARGB_8888);
-            tiltyview.setImageBitmap(mBitmap);
-            tiltycanvas = new Canvas(mBitmap);
-            mPaint.setColor(ContextCompat.getColor(this, R.color.colorPrimary));
-            mPaint.setStrokeWidth(5);
+    void drawtilty(String dstring) {
+        if (graphplot == null) {
+            if ((tiltyview.getWidth() == 0) || (tiltyview.getHeight() == 0))
+                return;
+            graphplot = new GraphPlot(this, tiltyview);
         }
-        int mColorBackground = ContextCompat.getColor(this, R.color.colorPrimaryDark);
-        tiltycanvas.drawColor(mColorBackground);
-        ang += 0.1;
-        float fx = (float)(Math.cos(ang)+1)/2;
-        float fy = (float)(Math.sin(ang)+1)/2;
-        tiltycanvas.drawLine(vwidth*0.5F, vheight*0.5F, vwidth*fx, vheight*fy, mPaint);
+        graphplot.drawstuff(dstring);
         tiltyview.invalidate();
-        Log.i("hhanglogE", "COLO"+vwidth+" "+vheight+"  "+mColorBackground);
     }
 }
