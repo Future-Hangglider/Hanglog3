@@ -2,12 +2,20 @@ package com.example.julian.hanglog3;
 
 import android.app.Activity;
 import android.content.Context;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Paint;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
+import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
 import android.os.Environment;
 import android.os.StrictMode;
+import android.support.v4.content.ContextCompat;
+import android.support.v4.content.res.ResourcesCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
@@ -15,8 +23,10 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.CompoundButton;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.Switch;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -35,22 +45,32 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 
 
 // Isolated class with its management and output
-class ReadSensor implements SensorEventListener {
+class ReadSensor implements SensorEventListener, LocationListener {
+    long mstampsensor0 = 0;
     SensorManager mSensorManager;
     Sensor mSensorRotvector;
     Sensor mSensorPressure;
-    long mstampsensor0 = 0;
+    LocationManager mLocationManager;
 
     Queue<String> phonesensorqueue = new ConcurrentLinkedQueue<String>();
+    int phonesensorqueuesizelimit = 10;
 
-    public ReadSensor(SensorManager lmSensorManager) {
+    public ReadSensor(SensorManager lmSensorManager, LocationManager lmLocationManager) {
         //mSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         mstampsensor0 = System.currentTimeMillis();
+
         mSensorManager = lmSensorManager;
         mSensorRotvector =  mSensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR);
         mSensorManager.registerListener(this, mSensorRotvector, SensorManager.SENSOR_DELAY_NORMAL);
         mSensorPressure = mSensorManager.getDefaultSensor(Sensor.TYPE_PRESSURE);
         mSensorManager.registerListener(this, mSensorPressure, SensorManager.SENSOR_DELAY_NORMAL);
+
+        mLocationManager = lmLocationManager;
+        try {
+            mLocationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 5000, 10, this);
+        } catch (SecurityException e) {
+            Log.i("hhanglogS", e.toString());
+        }
     }
 
     @Override
@@ -65,11 +85,38 @@ class ReadSensor implements SensorEventListener {
         // use https://stackoverflow.com/questions/41408704/how-to-convert-game-rotation-vector-sensor-result-to-axis-angles
         String phonesensorrep = null;
         if (evt.sensor.getType() == Sensor.TYPE_ROTATION_VECTOR)
-            phonesensorrep = String.format(":Zt%08Xx%04Xy%04Xz%04X\n", tstamp, ((int)(evt.values[0]*32768))&0xFFFF, ((int)(evt.values[1]*32768))&0xFFFF, ((int)(evt.values[2]*32768))&0xFFFF);
+            phonesensorrep = String.format("aZt%08Xx%04Xy%04Xz%04X\n", tstamp, ((int)(evt.values[0]*32768))&0xFFFF, ((int)(evt.values[1]*32768))&0xFFFF, ((int)(evt.values[2]*32768))&0xFFFF);
         else if (evt.sensor.getType() == Sensor.TYPE_PRESSURE)
-            phonesensorrep = String.format(":Ft%08Xp%06X\n", tstamp, ((int)(evt.values[0]*100))&0xFFFFFF);
-        if ((phonesensorrep != null) && (phonesensorqueue.size() < 10))
+            phonesensorrep = String.format("aFt%08Xp%06X\n", tstamp, ((int)(evt.values[0]*100))&0xFFFFFF);
+        if ((phonesensorrep != null) && (phonesensorqueue.size() < phonesensorqueuesizelimit))
             phonesensorqueue.add(phonesensorrep);
+    }
+
+    // GPS sensor functions
+    @Override
+    public void onProviderDisabled(String provider) {
+        Log.i("hhanglogLD", provider);
+    }
+    @Override
+    public void onProviderEnabled(String provider) {
+        Log.i("hhanglogLE", provider);
+    }
+    @Override
+    public void onStatusChanged(String provider, int status, Bundle extras) {
+        Log.i("hhanglogLES", provider);
+    }
+
+    @Override
+    public void onLocationChanged(Location loc) {
+        long tstamp = System.currentTimeMillis() - mstampsensor0;
+        Log.i("hhanglogL", "lat: " + loc.getLatitude() + "lng:" + loc.getLongitude());
+        int latminutes10000 = (int)Math.round(loc.getLatitude()*60*10000);
+        int lngminutes10000 = (int)Math.round(loc.getLongitude()*60*10000);
+        int altitude10 = (int)Math.round(loc.getAltitude()*10);
+        String phonesensorrep = String.format("aQt%08Xy%08x%08Xa%04X\n", tstamp, latminutes10000&0xFFFFFFFF, lngminutes10000&0xFFFFFFFF, altitude10&0xFFFF);
+        if ((phonesensorrep != null) && (phonesensorqueue.size() < phonesensorqueuesizelimit))
+            phonesensorqueue.add(phonesensorrep);
+
     }
 }
 
@@ -89,13 +136,11 @@ class RecUDP extends Thread {
     int fostreamlines = 0;
     FileOutputStream fostream = null;
     Queue<String> phonesensorqueue = null;
-    EditText epicwords = null;
-    Activity act = null;
+    LLog3 llog3 = null;
 
-    public RecUDP(Queue<String> lphonesensorqueue, Activity lact, EditText lepicwords) {
+    public RecUDP(Queue<String> lphonesensorqueue, LLog3 lllog3) {
         phonesensorqueue = lphonesensorqueue;
-        act = lact;
-        epicwords = lepicwords;
+        //act = lact;llog3 = lllog3;
         long mstampsensor0 = 0;
 
         Log.i("hhanglog22", "RecUDP");
@@ -153,17 +198,19 @@ class RecUDP extends Thread {
     }
 
     public void writefostream(byte[] data, int leng) throws IOException {
-        fostreamlines++;
-        if (data[0] == ':')
+        if (data[0] == 'a')
             fostreamlinesP++;
+        else
+            fostreamlines++;
         long mstamp = System.currentTimeMillis();
         if (mstamp > mstamp0) {
             final String lText = String.format("(%d,%d) ", fostreamlines, fostreamlinesP) + new String(data, 0, leng);
-            Log.i("hhanglogD", lText);
-            act.runOnUiThread(new Runnable() { // need to run settext on main UI thread only
+            //Log.i("hhanglogD", lText);
+            llog3.runOnUiThread(new Runnable() { // need to run settext on main UI thread only
                 @Override
                 public void run() {
-                    epicwords.setText(lText);
+                    llog3.epicwords.setText(lText);
+                    llog3.drawtilty();
                 }
             });
             mstamp0 = mstamp + 1000;
@@ -181,9 +228,12 @@ class RecUDP extends Thread {
             boolean bgood = false;
             try {
                 // write up anything from the phone sensors into the log file
-                String phonesensorrep = phonesensorqueue.poll();
-                if (phonesensorrep != null)
+                while (true) {
+                    String phonesensorrep = phonesensorqueue.poll();
+                    if (phonesensorrep == null)
+                        break;
                     writefostream(phonesensorrep.getBytes(), phonesensorrep.length());
+                }
 
                 if (msgtosend != null) {  // first send a message to the ESP UDP channel so it knows we want to hear from it.
                     String lmsgtosend = msgtosend;
@@ -216,27 +266,35 @@ class RecUDP extends Thread {
 
 public class LLog3 extends AppCompatActivity {
 
-    EditText outmonitor;
-    EditText epicwords;
-    EditText epicfile;
+    //EditText outmonitor;
+    TextView epicwords;
+    TextView epicfile;
 
     int nepic = 0;
 
     ReadSensor readsensor;
     RecUDP recudp;
     FileOutputStream fostream;
+    ImageView tiltyview;
+    Canvas tiltycanvas = null;
+    Bitmap mBitmap = null;
+    Paint mPaint = new Paint();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_llog3);
 
-        outmonitor = (EditText)findViewById(R.id.outmonitor);
-        epicwords = (EditText)findViewById(R.id.epicwords);
-        epicfile = (EditText)findViewById(R.id.epicfile);
+        //outmonitor = (EditText)findViewById(R.id.outmonitor);
+        epicwords = (TextView)findViewById(R.id.epicwords);
+        epicfile = (TextView)findViewById(R.id.epicfile);
+        tiltyview = (ImageView)findViewById(R.id.tiltyview); // too early to make tiltycanvas
 
-        readsensor = new ReadSensor((SensorManager)getSystemService(Context.SENSOR_SERVICE));
-        recudp = new RecUDP(readsensor.phonesensorqueue, this, epicwords);
+        readsensor = new ReadSensor((SensorManager)getSystemService(Context.SENSOR_SERVICE),
+                                    (LocationManager)getSystemService(Context.LOCATION_SERVICE));
+        Toast.makeText(getBaseContext(), "readsensormade", Toast.LENGTH_LONG).show();
+
+        recudp = new RecUDP(readsensor.phonesensorqueue, this);
         recudp.start();
 
         Switch gologgingswitch = (Switch)findViewById(R.id.gologgingswitch);
@@ -254,12 +312,34 @@ public class LLog3 extends AppCompatActivity {
             public void onClick(View view) {
                 Log.i("hhanglogE", "epic");
                 String str = "epic" + String.valueOf(nepic++)+"\n";
-                outmonitor.append(str);
+                //outmonitor.append(str);
                 if (recudp != null)
                     recudp.msgtosend = str;
+                drawtilty();
             }
         });
 
         epicwords.setText("yeep\n");
+    }
+
+    float ang = 0;
+    void drawtilty() {
+        int vwidth = tiltyview.getWidth();
+        int vheight = tiltyview.getHeight();
+        if (tiltycanvas == null) {
+            mBitmap = Bitmap.createBitmap(vwidth, vheight, Bitmap.Config.ARGB_8888);
+            tiltyview.setImageBitmap(mBitmap);
+            tiltycanvas = new Canvas(mBitmap);
+            mPaint.setColor(ContextCompat.getColor(this, R.color.colorPrimary));
+            mPaint.setStrokeWidth(5);
+        }
+        int mColorBackground = ContextCompat.getColor(this, R.color.colorPrimaryDark);
+        tiltycanvas.drawColor(mColorBackground);
+        ang += 0.1;
+        float fx = (float)(Math.cos(ang)+1)/2;
+        float fy = (float)(Math.sin(ang)+1)/2;
+        tiltycanvas.drawLine(vwidth*0.5F, vheight*0.5F, vwidth*fx, vheight*fy, mPaint);
+        tiltyview.invalidate();
+        Log.i("hhanglogE", "COLO"+vwidth+" "+vheight+"  "+mColorBackground);
     }
 }
