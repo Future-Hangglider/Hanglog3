@@ -20,6 +20,7 @@ import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
+import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.CompoundButton;
 import android.widget.EditText;
@@ -39,8 +40,10 @@ import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
 import java.text.SimpleDateFormat;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.Queue;
+import java.util.TimeZone;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 import com.example.julian.hanglog3.GraphPlot;
@@ -48,6 +51,9 @@ import com.example.julian.hanglog3.GraphPlot;
 // Isolated class with its management and output
 class ReadSensor implements SensorEventListener, LocationListener {
     long mstampsensor0 = 0;
+    public String mstampsensorD0;
+    long mstampmidnight0 = 0;
+
     SensorManager mSensorManager;
     Sensor mSensorRotvector;
     Sensor mSensorPressure;
@@ -58,7 +64,18 @@ class ReadSensor implements SensorEventListener, LocationListener {
 
     public ReadSensor(SensorManager lmSensorManager, LocationManager lmLocationManager) {
         //mSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
-        mstampsensor0 = System.currentTimeMillis();
+        TimeZone timeZoneUTC = TimeZone.getTimeZone("UTC");
+        Calendar rightNow = Calendar.getInstance(timeZoneUTC);
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS");
+        sdf.setTimeZone(timeZoneUTC);
+        mstampsensor0 = rightNow.getTimeInMillis();
+        mstampsensorD0 = sdf.format(rightNow.getTime());
+        rightNow.set(Calendar.HOUR_OF_DAY, 0);
+        rightNow.set(Calendar.MINUTE, 0);
+        rightNow.set(Calendar.SECOND, 0);
+        rightNow.set(Calendar.MILLISECOND, 0);
+        mstampmidnight0 = rightNow.getTimeInMillis();
+        Log.i("hhanglogDD", "midnightmillis "+mstampmidnight0+" dayoffs "+(mstampsensor0-mstampmidnight0));
 
         mSensorManager = lmSensorManager;
         mSensorRotvector =  mSensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR);
@@ -68,7 +85,7 @@ class ReadSensor implements SensorEventListener, LocationListener {
 
         mLocationManager = lmLocationManager;
         try {
-            mLocationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 5000, 10, this);
+            mLocationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 50, 1, this);
         } catch (SecurityException e) {
             Log.i("hhanglogS", e.toString());
         }
@@ -114,13 +131,17 @@ class ReadSensor implements SensorEventListener, LocationListener {
         int latminutes10000 = (int)Math.round(loc.getLatitude()*60*10000);
         int lngminutes10000 = (int)Math.round(loc.getLongitude()*60*10000);
         int altitude10 = (int)Math.round(loc.getAltitude()*10);
-        String phonesensorrep = String.format("aQt%08Xy%08x%08Xa%04X\n", tstamp, latminutes10000&0xFFFFFFFF, lngminutes10000&0xFFFFFFFF, altitude10&0xFFFF);
+        long mstampmidnight = loc.getTime() - mstampmidnight0;
+        String phonesensorrep = String.format("aQt%08Xu%08Xy%08Xx%08Xa%04X\n", tstamp, mstampmidnight, latminutes10000&0xFFFFFFFF, lngminutes10000&0xFFFFFFFF, altitude10&0xFFFF);
         if ((phonesensorrep != null) && (phonesensorqueue.size() < phonesensorqueuesizelimit))
             phonesensorqueue.add(phonesensorrep);
 
+        if (loc.hasSpeed() && (phonesensorrep != null) && (phonesensorqueue.size() < phonesensorqueuesizelimit)) {
+            String phonesensorrepV = String.format("aVt%08Xv%04Xd%04X\n", tstamp, ((int)(loc.getSpeed())*100)&0xFFFF, ((int)(loc.getBearing()*10))&0xFFFF);
+            phonesensorqueue.add(phonesensorrepV);
+        }
     }
 }
-
 
 // something about intent indexing in the manifest I don't understand
 // https://developer.android.com/studio/write/app-link-indexing#java
@@ -137,12 +158,13 @@ class RecUDP extends Thread {
     int fostreamlines = 0;
     FileOutputStream fostream = null;
     Queue<String> phonesensorqueue = null;
+    String mstampsensorD0;
     LLog3 llog3 = null;
 
-    public RecUDP(Queue<String> lphonesensorqueue, LLog3 lllog3) {
+    public RecUDP(Queue<String> lphonesensorqueue, String lmstampsensorD0, LLog3 lllog3) {
         phonesensorqueue = lphonesensorqueue;
         llog3 = lllog3;
-        long mstampsensor0 = 0;
+        mstampsensorD0 = lmstampsensorD0;
 
         Log.i("hhanglog22", "RecUDP");
         try {
@@ -165,7 +187,8 @@ class RecUDP extends Thread {
     // these two functions open and close the logging file
     public String StartLogging() {
         File fdir = new File(Environment.getExternalStorageDirectory(), "hanglog");
-        String currentDateandTime = new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new Date());
+        //String currentDateandTime = new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new Date());
+        String currentDateandTime = mstampsensorD0.substring(0, 19).replace(":", "-").replace("T", "_");
         File fdata = new File(fdir, "hdata" + "-" + currentDateandTime + ".log");
         fostreamlinesP = 0;
         fostreamlines = 0;
@@ -181,6 +204,8 @@ class RecUDP extends Thread {
             Log.i("hhanglogI", String.valueOf(e));
             return (e.toString());
         }
+        phonesensorqueue.clear();
+        phonesensorqueue.add(String.format("aRt%08Xd\"%s\"\n", 0, mstampsensorD0));
         return fdata.toString();
     }
 
@@ -204,6 +229,7 @@ class RecUDP extends Thread {
         else
             fostreamlines++;
         long mstamp = System.currentTimeMillis();
+        llog3.cpos.processPos(data, leng);
         if (mstamp > mstamp0) {
             final String dstring = new String(data, 0, leng);
             final String lText = String.format("(%d,%d) ", fostreamlines, fostreamlinesP) + dstring;
@@ -212,7 +238,7 @@ class RecUDP extends Thread {
                 @Override
                 public void run() {
                     llog3.epicwords.setText(lText);
-                    llog3.drawtilty(dstring);
+                    llog3.drawtilty();
                 }
             });
             mstamp0 = mstamp + 250;
@@ -278,12 +304,14 @@ public class LLog3 extends AppCompatActivity {
     RecUDP recudp;
     FileOutputStream fostream;
     ImageView tiltyview;
+    CurrentPos cpos = new CurrentPos();
     GraphPlot graphplot = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_llog3);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
         //outmonitor = (EditText)findViewById(R.id.outmonitor);
         epicwords = (TextView)findViewById(R.id.epicwords);
@@ -294,7 +322,7 @@ public class LLog3 extends AppCompatActivity {
                                     (LocationManager)getSystemService(Context.LOCATION_SERVICE));
         Toast.makeText(getBaseContext(), "readsensormade", Toast.LENGTH_LONG).show();
 
-        recudp = new RecUDP(readsensor.phonesensorqueue, this);
+        recudp = new RecUDP(readsensor.phonesensorqueue, readsensor.mstampsensorD0, this);
         recudp.start();
 
         Switch gologgingswitch = (Switch)findViewById(R.id.gologgingswitch);
@@ -322,13 +350,13 @@ public class LLog3 extends AppCompatActivity {
     }
 
     float ang = 0;
-    void drawtilty(String dstring) {
+    void drawtilty() {
         if (graphplot == null) {
             if ((tiltyview.getWidth() == 0) || (tiltyview.getHeight() == 0))
                 return;
-            graphplot = new GraphPlot(this, tiltyview);
+            graphplot = new GraphPlot(this, tiltyview, cpos);
         }
-        graphplot.drawstuff(dstring);
+        graphplot.drawstuff();
         tiltyview.invalidate();
     }
 }
