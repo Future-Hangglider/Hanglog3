@@ -188,15 +188,23 @@ class RecUDP extends Thread {
     public String StartLogging() {
         File fdir = new File(Environment.getExternalStorageDirectory(), "hanglog");
         //String currentDateandTime = new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new Date());
-        String currentDateandTime = mstampsensorD0.substring(0, 19).replace(":", "-").replace("T", "_");
-        File fdata = new File(fdir, "hdata" + "-" + currentDateandTime + ".log");
+
+        TimeZone timeZoneUTC = TimeZone.getTimeZone("UTC");
+        Calendar rightNow = Calendar.getInstance(timeZoneUTC);
+        SimpleDateFormat dsdf = new SimpleDateFormat("'hdata-'yyyy-MM-dd'_'HH-mm-ss.'log'");
+        dsdf.setTimeZone(timeZoneUTC);
+        String fname = dsdf.format(rightNow.getTime());
+        File fdata = new File(fdir, fname);
+
         fostreamlinesP = 0;
         fostreamlines = 0;
         try {
             fdir.mkdirs();
             fostream = new FileOutputStream(fdata);
-            String header = "HangPhoneUDPlog "+currentDateandTime+"\n\n";
+            String header = "HangPhoneUDPlog "+fname+"\n\n";
             fostream.write(header.getBytes(), 0, header.length());
+            Log.i("hhanglogFFout", String.valueOf(fdata));
+
         } catch (FileNotFoundException e) {
             Log.i("hhanglogFF", String.valueOf(e));
             return (e.toString() + " Please set storage permissions");
@@ -214,7 +222,11 @@ class RecUDP extends Thread {
             FileOutputStream lfostream = fostream;
             fostream = null;
             try {
+                String footer = String.format("End(%d,%d)\n", fostreamlines, fostreamlinesP);
+                lfostream.write(footer.getBytes(), 0, footer.length());
+                lfostream.flush();
                 lfostream.close();
+                Log.i("hhanglogFFout", footer);
             } catch (IOException e) {
                 Log.i("hhanglogI", String.valueOf(e));
                 return (e.toString() + " Please set storage permissions");

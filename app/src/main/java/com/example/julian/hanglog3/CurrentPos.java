@@ -97,12 +97,12 @@ public class CurrentPos {
                 exfac = nyfac*Math.cos(Math.toRadians(lat0));
             }
             if (data[0] == 'a') {
-                xposA = (lat - lat0)*exfac;
-                yposA = (lng - lng0)*nyfac;
+                xposA = (lng - lng0)*exfac;
+                yposA = (lat - lat0)*nyfac;
                 altA = lalt;
             } else {
-                xpos = (lat - lat0)*exfac;
-                ypos = (lng - lng0)*nyfac;
+                xpos = (lng - lng0)*exfac;
+                ypos = (lat - lat0)*nyfac;
                 alt = lalt;
             }
         }
