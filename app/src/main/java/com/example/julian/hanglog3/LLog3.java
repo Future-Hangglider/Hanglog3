@@ -150,9 +150,14 @@ class RecUDP extends Thread {
     DatagramSocket socket;
     DatagramPacket dp;
 
+    // this is where we send and receive the datagram values to
     String ipnumpc = "192.168.4.1";
-    int port = 9019;
     InetAddress iipnumpc = null;
+    int port = 9019;
+
+    InetAddress iipnumesp = null;
+    int espport = 0;
+
     long mstamp0 = 0;
     int fostreamlinesP = 0;
     int fostreamlines = 0;
@@ -160,6 +165,9 @@ class RecUDP extends Thread {
     Queue<String> phonesensorqueue = null;
     String mstampsensorD0;
     LLog3 llog3 = null;
+
+    byte[] dataE = null, dataP = null;
+    int lengE = 0, lengP = 0;
 
     public RecUDP(Queue<String> lphonesensorqueue, String lmstampsensorD0, LLog3 lllog3) {
         phonesensorqueue = lphonesensorqueue;
@@ -179,6 +187,7 @@ class RecUDP extends Thread {
             socket.setSoTimeout(100);
         } catch (SocketException e) {
             Log.i("hhanglog15", e.getMessage());
+            llog3.lepicipnum = "socketfail:"+e.getMessage();
         }
         dp = new DatagramPacket(lMsg, lMsg.length);
 
@@ -214,7 +223,9 @@ class RecUDP extends Thread {
         }
         phonesensorqueue.clear();
         phonesensorqueue.add(String.format("aRt%08Xd\"%s\"\n", 0, mstampsensorD0));
+
         return fdata.toString();
+        //return fdir + "\n" + fname;
     }
 
     public String StopLogging() {
@@ -236,31 +247,48 @@ class RecUDP extends Thread {
     }
 
     public void writefostream(byte[] data, int leng) throws IOException {
-        if (data[0] == 'a')
-            fostreamlinesP++;
-        else
-            fostreamlines++;
+        FileOutputStream lfostream = fostream; // protect null pointers from thread conditions
+        if (lfostream != null)
+            lfostream.write(data, 0, leng);
+
         long mstamp = System.currentTimeMillis();
         llog3.cpos.processPos(data, leng);
-        if (mstamp > mstamp0) {
-            final String dstring = new String(data, 0, leng);
-            final String lText = String.format("(%d,%d) ", fostreamlines, fostreamlinesP) + dstring;
-            //Log.i("hhanglogD", lText);
+
+        if (data[0] == 'a') {
+            fostreamlinesP++;
+            dataP = data;
+            lengP = leng;
+        } else {
+            fostreamlines++;
+            dataE = data;
+            lengE = leng;
+        }
+
+        if ((mstamp > mstamp0)) {
+            final String dstringP = (dataP != null ? new String(dataP, 0, lengP) : null);
+            dataP = null;
+            final String dstringE = (dataE != null ? new String(dataE, 0, lengE) : null);
+            dataE = null;
+            
             llog3.runOnUiThread(new Runnable() { // need to run settext on main UI thread only
                 @Override
                 public void run() {
-                    llog3.epicwords.setText(lText);
+                    if (dstringE != null)
+                        llog3.epicwords.setText(String.format("(%d) %s", fostreamlines, dstringE));
+                    if (dstringP != null)
+                        llog3.epicwords2.setText(String.format("(%d) %s", fostreamlinesP, dstringP));
                     llog3.drawtilty();
+                    if (llog3.lepicipnum != null) {
+                        llog3.epicipnum.setText(llog3.lepicipnum);
+                        llog3.lepicipnum = null;
+                    }
                 }
             });
             mstamp0 = mstamp + 250;
         }
-        FileOutputStream lfostream = fostream; // protect null pointers from thread conditions
-        if (lfostream != null)
-            lfostream.write(data, 0, leng);
     }
 
-    // this gets to the threading object
+    // this gets to the threading object which sits on socket.receive
     public String msgtosend = null;
     @Override
     public void run() {
@@ -275,15 +303,23 @@ class RecUDP extends Thread {
                     writefostream(phonesensorrep.getBytes(), phonesensorrep.length());
                 }
 
-                if (msgtosend != null) {  // first send a message to the ESP UDP channel so it knows we want to hear from it.
+                if ((msgtosend != null) && (socket != null)) {  // first send a message to the ESP UDP channel so it knows we want to hear from it.
                     String lmsgtosend = msgtosend;
                     Log.i("hhanglogE", lmsgtosend);
                     msgtosend = null;
+                    llog3.lepicipnum = String.format("s %s:%d", iipnumpc.getHostAddress(), port);
                     socket.send(new DatagramPacket(lmsgtosend.getBytes(), lmsgtosend.length(), iipnumpc, port));
                 }
-                socket.receive(dp); // this then timesout
-                writefostream(dp.getData(), dp.getLength());
-                bgood = true;
+                //
+                //
+                //
+                if (socket != null) {
+                    socket.receive(dp); // this then timesout after 100
+                    llog3.lepicipnum = String.format("r %s:%d", dp.getAddress().getHostAddress(), dp.getPort());
+                    Log.i("hhanglogG",dp.toString());
+                    writefostream(dp.getData(), dp.getLength());
+                    bgood = true;
+                }
             } catch (SocketTimeoutException e) {
                 Log.i("hanglog7", String.valueOf(e));
             } catch (SocketException e) {
@@ -308,7 +344,10 @@ public class LLog3 extends AppCompatActivity {
 
     //EditText outmonitor;
     TextView epicwords;
-    TextView epicfile;
+    TextView epicwords2;
+    String lepicipnum = null;
+    TextView epicipnum;
+    EditText epicfile;
 
     int nepic = 0;
 
@@ -327,7 +366,9 @@ public class LLog3 extends AppCompatActivity {
 
         //outmonitor = (EditText)findViewById(R.id.outmonitor);
         epicwords = (TextView)findViewById(R.id.epicwords);
-        epicfile = (TextView)findViewById(R.id.epicfile);
+        epicwords2 = (TextView)findViewById(R.id.epicwords2);
+        epicipnum = (TextView)findViewById(R.id.epicipnum);
+        epicfile = (EditText)findViewById(R.id.epicfile);
         tiltyview = (ImageView)findViewById(R.id.tiltyview); // too early to make tiltycanvas
 
         readsensor = new ReadSensor((SensorManager)getSystemService(Context.SENSOR_SERVICE),

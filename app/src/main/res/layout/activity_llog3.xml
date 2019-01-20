@@ -23,21 +23,47 @@
         android:layout_marginTop="116dp"
         android:ems="10"
         android:inputType="textLongMessage"
-        android:text="spare"
+        android:text="remotein"
         app:layout_constraintLeft_toLeftOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
+    <TextView
+        android:id="@+id/epicwords2"
+        android:layout_width="339dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="32dp"
+        android:layout_marginTop="140dp"
+        android:ems="10"
+        android:inputType="textLongMessage"
+        android:text="localin"
+        app:layout_constraintLeft_toLeftOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
 
     <TextView
+        android:id="@+id/epicipnum"
+        android:layout_width="339dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="32dp"
+        android:layout_marginTop="160dp"
+        android:ems="10"
+        android:inputType="textLongMessage"
+        android:text="ipnumber"
+        app:layout_constraintLeft_toLeftOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <EditText
         android:id="@+id/epicfile"
-        android:layout_width="343dp"
-        android:layout_height="47dp"
+        android:layout_width="324dp"
+        android:layout_height="70dp"
         android:layout_marginStart="28dp"
         android:layout_marginTop="56dp"
         android:ems="10"
-        android:inputType="textLongMessage"
-        android:text="Name"
+        android:inputType="textMultiLine"
+        android:text="filename"
+        android:textSize="18dp"
         app:layout_constraintLeft_toLeftOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
@@ -58,7 +84,7 @@
         android:layout_width="275dp"
         android:layout_height="182dp"
         android:layout_marginStart="52dp"
-        android:layout_marginTop="148dp"
+        android:layout_marginTop="190dp"
         app:layout_constraintLeft_toLeftOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
