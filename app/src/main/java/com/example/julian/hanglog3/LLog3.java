@@ -12,6 +12,7 @@ import android.hardware.SensorManager;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
+import android.net.wifi.WifiManager;
 import android.os.Environment;
 import android.os.StrictMode;
 import android.support.v4.content.ContextCompat;
@@ -33,9 +34,12 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
@@ -47,6 +51,9 @@ import java.util.TimeZone;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 import com.example.julian.hanglog3.GraphPlot;
+
+// Will we be able to tell if we are a hotspot, or are connecting to the esp hotspot?
+// and make the UDP connection appropriately?
 
 // Isolated class with its management and output
 class ReadSensor implements SensorEventListener, LocationListener {
@@ -151,7 +158,6 @@ class RecUDP extends Thread {
     DatagramPacket dp;
 
     // this is where we send and receive the datagram values to
-    String ipnumpc = "192.168.4.1";
     InetAddress iipnumpc = null;
     int port = 9019;
 
@@ -174,6 +180,9 @@ class RecUDP extends Thread {
         llog3 = lllog3;
         mstampsensorD0 = lmstampsensorD0;
 
+        String ipnumpc = (llog3.bhotspotmode ? "192.168.43.1"   // default for android
+                                             : "192.168.4.1");  // default for esp8266
+
         Log.i("hhanglog22", "RecUDP");
         try {
             iipnumpc = InetAddress.getByName(ipnumpc);
@@ -185,12 +194,13 @@ class RecUDP extends Thread {
         try {
             socket = new DatagramSocket(port);
             socket.setSoTimeout(100);
+            //if (llog3.bhotspotmode)
+            //    socket.bind(new InetSocketAddress(port));
         } catch (SocketException e) {
             Log.i("hhanglog15", e.getMessage());
             llog3.lepicipnum = "socketfail:"+e.getMessage();
         }
         dp = new DatagramPacket(lMsg, lMsg.length);
-
     }
 
     // these two functions open and close the logging file
@@ -269,7 +279,7 @@ class RecUDP extends Thread {
             dataP = null;
             final String dstringE = (dataE != null ? new String(dataE, 0, lengE) : null);
             dataE = null;
-            
+
             llog3.runOnUiThread(new Runnable() { // need to run settext on main UI thread only
                 @Override
                 public void run() {
@@ -310,11 +320,12 @@ class RecUDP extends Thread {
                     llog3.lepicipnum = String.format("s %s:%d", iipnumpc.getHostAddress(), port);
                     socket.send(new DatagramPacket(lmsgtosend.getBytes(), lmsgtosend.length(), iipnumpc, port));
                 }
-                //
-                //
-                //
+
                 if (socket != null) {
+                    //
                     socket.receive(dp); // this then timesout after 100
+                    //
+
                     llog3.lepicipnum = String.format("r %s:%d", dp.getAddress().getHostAddress(), dp.getPort());
                     Log.i("hhanglogG",dp.toString());
                     writefostream(dp.getData(), dp.getLength());
@@ -350,6 +361,7 @@ public class LLog3 extends AppCompatActivity {
     EditText epicfile;
 
     int nepic = 0;
+    boolean bhotspotmode;
 
     ReadSensor readsensor;
     RecUDP recudp;
@@ -374,6 +386,12 @@ public class LLog3 extends AppCompatActivity {
         readsensor = new ReadSensor((SensorManager)getSystemService(Context.SENSOR_SERVICE),
                                     (LocationManager)getSystemService(Context.LOCATION_SERVICE));
         Toast.makeText(getBaseContext(), "readsensormade", Toast.LENGTH_LONG).show();
+
+        WifiManager wifimanager = (WifiManager)getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+        bhotspotmode = (wifimanager.getWifiState() == WifiManager.WIFI_STATE_DISABLED); // no wifi then assume hotspot mode
+        int ipAddress = wifimanager.getConnectionInfo().getIpAddress();
+        Log.i("hhanglogIP", String.format("ipAddress %d", ipAddress));
+        epicipnum.setText(String.format("ipAddress %d %d", ipAddress, wifimanager.getWifiState()));
 
         recudp = new RecUDP(readsensor.phonesensorqueue, readsensor.mstampsensorD0, this);
         recudp.start();
