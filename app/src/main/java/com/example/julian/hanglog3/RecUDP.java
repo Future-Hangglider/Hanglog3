@@ -21,6 +21,9 @@ import java.util.Calendar;
 import java.util.Queue;
 import java.util.TimeZone;
 
+// Needs to use threads because socket.receive() hangs.
+// The UBX UDP has port 9020, and normal logging is on port 9019
+
 class RecUBXUDP extends Thread {
     RecUDP recudp;
 
@@ -37,7 +40,7 @@ class RecUBXUDP extends Thread {
                 if (recudp.socketUBX != null) {
                     recudp.socketUBX.receive(recudp.dpUBX); // this then timesout after 100
                     recudp.llog3.lepicipnumubx = String.format("r %s:%d", recudp.dpUBX.getAddress().getHostAddress(), recudp.dpUBX.getPort());
-                    recudp.ubxbytesP += recudp.dpUBX.getLength();
+                    recudp.writefostreamUBX(recudp.dpUBX.getAddress().getHostAddress(), recudp.dpUBX.getData(), recudp.dpUBX.getLength());
                     bgood = true;
                 }
             } catch (SocketTimeoutException e) {
@@ -80,6 +83,8 @@ class RecUDP extends Thread {
     int fostreamlinesP = 0;
     int fostreamlines = 0;
     FileOutputStream fostream = null;
+    FileOutputStream fostreamUBX = null;
+
     Queue<String> phonesensorqueue = null;
     String mstampsensorD0;
     LLog3 llog3 = null;
@@ -93,7 +98,7 @@ class RecUDP extends Thread {
         mstampsensorD0 = lmstampsensorD0;
 
         String ipnumpc = (llog3.bhotspotmode ? "192.168.43.1"   // default for android
-                : "192.168.4.1");  // default for esp8266
+                                             : "192.168.4.1");  // default for esp8266
 
         Log.i("hhanglog22", "RecUDP");
         try {
@@ -111,7 +116,7 @@ class RecUDP extends Thread {
             //    socket.bind(new InetSocketAddress(port));
 
             socketUBX = new DatagramSocket(portUBX);
-            socketUBX .setSoTimeout(100);
+            socketUBX.setSoTimeout(100);
 
         } catch (SocketException e) {
             Log.i("hhanglog15", e.getMessage());
@@ -128,19 +133,23 @@ class RecUDP extends Thread {
 
         TimeZone timeZoneUTC = TimeZone.getTimeZone("UTC");
         Calendar rightNow = Calendar.getInstance(timeZoneUTC);
-        SimpleDateFormat dsdf = new SimpleDateFormat("'hdata-'yyyy-MM-dd'_'HH-mm-ss.'log'");
+        SimpleDateFormat dsdf = new SimpleDateFormat("'hdata-'yyyy-MM-dd'_'HH-mm-ss");
         dsdf.setTimeZone(timeZoneUTC);
         String fname = dsdf.format(rightNow.getTime());
-        File fdata = new File(fdir, fname);
+        File fdata = new File(fdir, fname+".log");
+        File fdataUBX = new File(fdir, fname+".ubx");
 
         fostreamlinesP = 0;
         fostreamlines = 0;
+        ubxbytesP = 0;
+
         try {
             fdir.mkdirs();
             fostream = new FileOutputStream(fdata);
             String header = "HangPhoneUDPlog "+fname+"\n\n";
             fostream.write(header.getBytes(), 0, header.length());
             Log.i("hhanglogFFout", String.valueOf(fdata));
+            fostreamUBX = new FileOutputStream(fdataUBX);
 
         } catch (FileNotFoundException e) {
             Log.i("hhanglogFF", String.valueOf(e));
@@ -171,7 +180,26 @@ class RecUDP extends Thread {
                 return (e.toString() + " Please set storage permissions");
             }
         }
+        if (fostreamUBX != null) {
+            FileOutputStream lfostreamUBX = fostreamUBX;
+            fostreamUBX = null;
+            try {
+                lfostreamUBX.flush();
+                lfostreamUBX.close();
+            } catch (IOException e) {
+                Log.i("hhanglogIubx", String.valueOf(e));
+                return (e.toString() + " Please set storage permissions");
+            }
+        }
         return "closed";
+    }
+
+    // this is where we separate out multiple UBX streams from different ipnumbers
+    public void writefostreamUBX(String epicipnumUBX, byte[] data, int leng) throws IOException {
+        ubxbytesP += leng;
+        FileOutputStream lfostreamUBX = fostreamUBX; // protect null pointers from thread conditions
+        if (lfostreamUBX != null)
+            lfostreamUBX.write(data, 0, leng);
     }
 
     public void writefostream(byte[] data, int leng) throws IOException {
@@ -246,9 +274,7 @@ class RecUDP extends Thread {
                 }
 
                 if (socket != null) {
-                    //
-                    socket.receive(dp); // this then timesout after 100
-                    //
+                    socket.receive(dp); // this timesout after 100
 
                     llog3.lepicipnum = String.format("r %s:%d", dp.getAddress().getHostAddress(), dp.getPort());
                     Log.i("hhanglogG", dp.toString());
