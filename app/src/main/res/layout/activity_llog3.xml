@@ -11,7 +11,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginLeft="28dp"
-        android:text="Go UDP"
+        android:text="Ping UDP"
         app:layout_constraintLeft_toLeftOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
@@ -55,30 +55,83 @@
         app:layout_constraintTop_toTopOf="parent" />
 
     <TextView
-        android:id="@+id/epicipnumubx"
+        android:id="@+id/epicipnumubxA"
         android:layout_width="187dp"
         android:layout_height="20dp"
-        android:layout_marginStart="32dp"
+        android:layout_marginStart="30dp"
         android:layout_marginTop="208dp"
         android:ems="10"
         android:inputType="textLongMessage"
-        android:text="ipnumber"
+        android:text="ubxAipnumber"
         app:layout_constraintLeft_toLeftOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
     <TextView
-        android:id="@+id/epicubxwords"
+        android:id="@+id/epicubxbytesA"
         android:layout_width="134dp"
         android:layout_height="21dp"
         android:layout_marginStart="232dp"
         android:layout_marginTop="208dp"
         android:ems="10"
         android:inputType="textLongMessage"
-        android:text="ipnumber"
+        android:text="ubxAbytecount"
         app:layout_constraintLeft_toLeftOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
+
+    <TextView
+        android:id="@+id/epicipnumubxB"
+        android:layout_width="187dp"
+        android:layout_height="20dp"
+        android:layout_marginStart="30dp"
+        android:layout_marginTop="228dp"
+        android:ems="10"
+        android:inputType="textLongMessage"
+        android:text="ubxBipnumber"
+        app:layout_constraintLeft_toLeftOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <TextView
+        android:id="@+id/epicubxbytesB"
+        android:layout_width="134dp"
+        android:layout_height="21dp"
+        android:layout_marginStart="232dp"
+        android:layout_marginTop="228dp"
+        android:ems="10"
+        android:inputType="textLongMessage"
+        android:text="ubxBbytecount"
+        app:layout_constraintLeft_toLeftOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <TextView
+        android:id="@+id/epicipnumubxC"
+        android:layout_width="187dp"
+        android:layout_height="20dp"
+        android:layout_marginStart="30dp"
+        android:layout_marginTop="248dp"
+        android:ems="10"
+        android:inputType="textLongMessage"
+        android:text="ubxCipnumber"
+        app:layout_constraintLeft_toLeftOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <TextView
+        android:id="@+id/epicubxbytesC"
+        android:layout_width="134dp"
+        android:layout_height="21dp"
+        android:layout_marginStart="232dp"
+        android:layout_marginTop="248dp"
+        android:ems="10"
+        android:inputType="textLongMessage"
+        android:text="ubxCbytecount"
+        app:layout_constraintLeft_toLeftOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
 
     <EditText
         android:id="@+id/epicfile"
@@ -111,7 +164,7 @@
         android:layout_width="275dp"
         android:layout_height="182dp"
         android:layout_marginStart="52dp"
-        android:layout_marginTop="244dp"
+        android:layout_marginTop="280dp"
         app:layout_constraintLeft_toLeftOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
