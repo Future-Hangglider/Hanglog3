@@ -27,15 +27,16 @@ import java.util.TimeZone;
 
 
 class SocketServerReplyThread extends Thread {
-
     Socket hostThreadSocket;
+    int threadcount;
     LLog3 llog3;
-    int ubxI;
+    int ubxI = -1;
     char ubxILetter;
     RecUDP recudp;
 
-    SocketServerReplyThread(Socket socket, LLog3 lllog3) {
+    SocketServerReplyThread(Socket socket, int lthreadcount, LLog3 lllog3) {
         hostThreadSocket = socket;
+        threadcount = lthreadcount;
         llog3 = lllog3;
         recudp = llog3.recudp;
     }
@@ -45,29 +46,69 @@ class SocketServerReplyThread extends Thread {
         try {
             OutputStream outputStream = hostThreadSocket.getOutputStream();
             InputStream inputStream = hostThreadSocket.getInputStream();
-            outputStream.write((new String("Hello from Android\n")).getBytes());
+            outputStream.write((String.format("Hello from Android thread %d\n", threadcount)).getBytes());
             int h0 = inputStream.read();
             int h1 = inputStream.read();
             int h2 = inputStream.read();
             int h3 = inputStream.read();
-            Log.i("hhanglogX", String.format("bytes %x %x %x %x", h0, h1, h2, h3));
+            Log.i("hhanglogX", String.format("thread%d bytes %x %x %x %x", threadcount, h0, h1, h2, h3));
 
+            // connection from ESP32 with data
             if ((h0 == h1) && (h0 == h2) && (h0 == h3) && (h0 >= 'A') && (h0 <= 'C')) {
                 ubxI = h0 - 'A';
                 ubxILetter = (char) h0;
 
-                recudp.llog3.lepicipnumubx[ubxI] = String.format("r%s %s:%d", ubxILetter, hostThreadSocket.getInetAddress().getCanonicalHostName(), 112233);
+                if (recudp.fosocketthread[ubxI] != null) {
+                    recudp.fosocketthread[ubxI].closethesocket();
+                }
+                recudp.fosocketthread[ubxI] = this;
+                recudp.llog3.lepicipnumubx[ubxI] = String.format("r%s %s:%d", ubxILetter, hostThreadSocket.getInetAddress().getCanonicalHostName(), -1);
 
                 byte[] buff = new byte[1000];
                 while (true) {
                     int x = inputStream.read(buff);
-                    Log.i("hhanglogX", String.format("bytes %d %x", x, buff[0]));
-                    recudp.writefostreamUBX(ubxI, buff, x);
+                    if (x != -1) {
+                        //Log.i("hhanglogX", String.format("thread %d bytes %d %x", threadcount, x, buff[0]));
+                        recudp.writefostreamUBX(ubxI, buff, x);
+                        sleep(20);
+                    }
                 }
+
+            // connection in from PC wanting data to be forewarded to it (hand over socket and terminate thread)
+            } else if ((h0 == '-') && (h1 == h2) && (h1 == h3) && (h1 >= 'A') && (h1 <= 'C')) {
+                int subxI = h1 - 'A';
+                Log.i("hhanglogX pcforward", String.format("thread %d ubxI %d", threadcount, subxI));
+                if (recudp.pcforwardsockets[subxI] != null) {
+                    try {
+                        recudp.pcforwardsockets[subxI].close();
+                    } catch (IOException e) {
+                        ;
+                    }
+                }
+                recudp.pcforwardsockets[subxI] = hostThreadSocket;
+                recudp.pcforwardoutputStreams[subxI] = recudp.pcforwardsockets[subxI].getOutputStream();
+                hostThreadSocket = null;
+                return;
             }
         } catch (IOException e) {
             e.printStackTrace();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
         }
+
+        if ((ubxI != -1) && (hostThreadSocket != null)) {
+            try {
+                hostThreadSocket.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            Log.i("hhanglogX", "closed");
+            recudp.fosocketthread[ubxI] = null;
+        }
+    }
+
+    public void closethesocket() {
+        Log.i("hhanglogX", "closing");
         try {
             hostThreadSocket.close();
         } catch (IOException e) {
@@ -75,6 +116,7 @@ class SocketServerReplyThread extends Thread {
         }
     }
 }
+
 
 // Now make a serversocket version to transition from UDP technology
 class SocketServerThread extends Thread {
@@ -86,18 +128,25 @@ class SocketServerThread extends Thread {
 
     @Override
     public void run() {
+        int threadcount = 0;
+        ServerSocket serverSocket;
         try {
-            ServerSocket serverSocket = new ServerSocket(9042);
-            while (true) {
-                Log.i("hhanglogW", "serverSocket.accept");
-                Socket socket = serverSocket.accept();
-                Log.i("hhanglogW connnectionmade", socket.getInetAddress().toString());
-                SocketServerReplyThread socketServerReplyThread = new SocketServerReplyThread(socket, llog3);
-                socketServerReplyThread.run();
-            }
+            serverSocket = new ServerSocket(9042);
         } catch (IOException e) {
-            // TODO Auto-generated catch block
             e.printStackTrace();
+            return;
+        }
+        while (true) {
+            try {
+                Log.i("hhanglogW", "serverSocket.accepting next "+threadcount);
+                Socket hostThreadSocket = serverSocket.accept();
+                Log.i("hhanglogW connnectionmade", hostThreadSocket.getInetAddress().toString()+" thread:"+threadcount);
+                SocketServerReplyThread socketServerReplyThread = new SocketServerReplyThread(hostThreadSocket, threadcount, llog3);
+                socketServerReplyThread.start();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            threadcount += 1;
         }
     }
 }
@@ -173,6 +222,9 @@ class RecUDP extends Thread {
     FileOutputStream fostream = null;
     File[] fdataUBX = new File[3];
     FileOutputStream[] fostreamUBX = new FileOutputStream[3];
+    SocketServerReplyThread[] fosocketthread = new SocketServerReplyThread[3];
+    Socket[] pcforwardsockets = new Socket[3];
+    OutputStream[] pcforwardoutputStreams = new OutputStream[3];
 
     Queue<String> phonesensorqueue = null;
     String mstampsensorD0;
@@ -312,7 +364,21 @@ class RecUDP extends Thread {
         FileOutputStream lfostreamUBX = fostreamUBX[ubxI];
         if (lfostreamUBX != null)
             lfostreamUBX.write(data, 0, leng);
+
         ubxbytesP[ubxI] += leng;
+
+        Socket lpcforwardsocket = pcforwardsockets[ubxI];
+        if (lpcforwardsocket != null) {
+            try {
+                pcforwardoutputStreams[ubxI].write(data, 0, leng);
+            } catch (IOException e) {
+                pcforwardsockets[ubxI] = null;
+                pcforwardoutputStreams[ubxI] = null;
+                lpcforwardsocket.close();
+            }
+        }
+
+
     }
 
     public void writefostream(byte[] data, int leng) throws IOException {
@@ -334,6 +400,7 @@ class RecUDP extends Thread {
         }
 
 
+        // update the numbers in the UI at a quarter second rate
         if ((mstamp > mstamp0)) {
             final String dstringP = (dataP != null ? new String(dataP, 0, lengP) : null);
             dataP = null;
