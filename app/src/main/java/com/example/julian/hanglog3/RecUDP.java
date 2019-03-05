@@ -10,9 +10,13 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
@@ -20,6 +24,84 @@ import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Queue;
 import java.util.TimeZone;
+
+
+class SocketServerReplyThread extends Thread {
+
+    Socket hostThreadSocket;
+    LLog3 llog3;
+    int ubxI;
+    char ubxILetter;
+    RecUDP recudp;
+
+    SocketServerReplyThread(Socket socket, LLog3 lllog3) {
+        hostThreadSocket = socket;
+        llog3 = lllog3;
+        recudp = llog3.recudp;
+    }
+
+    @Override
+    public void run() {
+        try {
+            OutputStream outputStream = hostThreadSocket.getOutputStream();
+            InputStream inputStream = hostThreadSocket.getInputStream();
+            outputStream.write((new String("Hello from Android\n")).getBytes());
+            int h0 = inputStream.read();
+            int h1 = inputStream.read();
+            int h2 = inputStream.read();
+            int h3 = inputStream.read();
+            Log.i("hhanglogX", String.format("bytes %x %x %x %x", h0, h1, h2, h3));
+
+            if ((h0 == h1) && (h0 == h2) && (h0 == h3) && (h0 >= 'A') && (h0 <= 'C')) {
+                ubxI = h0 - 'A';
+                ubxILetter = (char) h0;
+
+                recudp.llog3.lepicipnumubx[ubxI] = String.format("r%s %s:%d", ubxILetter, hostThreadSocket.getInetAddress().getCanonicalHostName(), 112233);
+
+                byte[] buff = new byte[1000];
+                while (true) {
+                    int x = inputStream.read(buff);
+                    Log.i("hhanglogX", String.format("bytes %d %x", x, buff[0]));
+                    recudp.writefostreamUBX(ubxI, buff, x);
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        try {
+            hostThreadSocket.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+}
+
+// Now make a serversocket version to transition from UDP technology
+class SocketServerThread extends Thread {
+    LLog3 llog3;
+
+    SocketServerThread(LLog3 lllog3) {
+        llog3 = lllog3;
+    }
+
+    @Override
+    public void run() {
+        try {
+            ServerSocket serverSocket = new ServerSocket(9042);
+            while (true) {
+                Log.i("hhanglogW", "serverSocket.accept");
+                Socket socket = serverSocket.accept();
+                Log.i("hhanglogW connnectionmade", socket.getInetAddress().toString());
+                SocketServerReplyThread socketServerReplyThread = new SocketServerReplyThread(socket, llog3);
+                socketServerReplyThread.run();
+            }
+        } catch (IOException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+    }
+}
+
 
 // Needs to use threads because socket.receive() hangs.
 // The UBX UDP has ports 9020-2, and normal logging is on port 9019
@@ -44,7 +126,7 @@ class RecUBXUDP extends Thread {
                 if (recudp.socketUBX[ubxI] != null) {
                     recudp.socketUBX[ubxI].receive(recudp.dpUBX[ubxI]); // this then timesout after 100
                     recudp.llog3.lepicipnumubx[ubxI] = String.format("r%s %s:%d", ubxILetter, recudp.dpUBX[ubxI].getAddress().getHostAddress(), recudp.dpUBX[ubxI].getPort());
-                    recudp.writefostreamUBX(ubxI, recudp.dpUBX[ubxI].getAddress().getHostAddress(), recudp.dpUBX[ubxI].getData(), recudp.dpUBX[ubxI].getLength());
+                    recudp.writefostreamUBX(ubxI, recudp.dpUBX[ubxI].getData(), recudp.dpUBX[ubxI].getLength());
                     bgood = true;
                 }
             } catch (SocketTimeoutException e) {
@@ -220,7 +302,7 @@ class RecUDP extends Thread {
     }
 
     // this is where we separate out multiple UBX streams from different ipnumbers
-    public void writefostreamUBX(int ubxI, String epicipnumUBX, byte[] data, int leng) throws IOException {
+    public void writefostreamUBX(int ubxI, byte[] data, int leng) throws IOException {
         try {
         if ((fdataUBX[ubxI] != null) && (fostreamUBX[ubxI] == null) && (ubxbytesP[ubxI] == 0))
             fostreamUBX[ubxI] = new FileOutputStream(fdataUBX[ubxI]);

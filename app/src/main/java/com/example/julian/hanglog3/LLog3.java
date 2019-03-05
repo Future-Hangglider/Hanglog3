@@ -38,6 +38,7 @@ public class LLog3 extends AppCompatActivity {
     ReadSensor readsensor;
     RecUDP recudp;
     RecUBXUDP[] recubxudp = new RecUBXUDP[3];
+    SocketServerThread socketserverthread;
 
     FileOutputStream fostream;
     ImageView tiltyview;
@@ -74,6 +75,11 @@ public class LLog3 extends AppCompatActivity {
         Log.i("hhanglogIP", String.format("ipAddress %d", ipAddress));
         epicipnum.setText(String.format("ipAddress %d %d", ipAddress, wifimanager.getWifiState()));
 
+        // soon to replace socket server technology
+        socketserverthread = new SocketServerThread(this);
+        socketserverthread.start();
+
+        // older original UDP technology
         recudp = new RecUDP(readsensor.phonesensorqueue, readsensor.mstampsensorD0, this);
         recudp.start();
         for (int i = 0; i < 3; i++) {
