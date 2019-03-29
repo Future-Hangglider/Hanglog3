@@ -20,6 +20,7 @@ import java.net.Socket;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
+import java.nio.ByteBuffer;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Queue;
@@ -53,10 +54,10 @@ class SocketServerReplyThread extends Thread {
             int h3 = inputStream.read();
             Log.i("hhanglogX", String.format("thread%d bytes %x %x %x %x", threadcount, h0, h1, h2, h3));
 
-            // connection from ESP32 with data
-            if ((h0 == h1) && (h0 == h2) && (h0 == h3) && (h0 >= 'A') && (h0 <= 'C')) {
-                ubxI = h0 - 'A';
-                ubxILetter = (char) h0;
+            // connection from ESP32 with data; @ABC
+            if ((h0 == h1) && (h0 == h2) && (h0 == h3) && (h0 >= '@') && (h0 <= 'C')) {
+                ubxI = h0 - '@';
+                ubxILetter = (char)h0;
 
                 if (recudp.fosocketthread[ubxI] != null) {
                     recudp.fosocketthread[ubxI].closethesocket();
@@ -65,18 +66,30 @@ class SocketServerReplyThread extends Thread {
                 recudp.llog3.lepicipnumubx[ubxI] = String.format("r%s %s:%d", ubxILetter, hostThreadSocket.getInetAddress().getCanonicalHostName(), -1);
 
                 byte[] buff = new byte[1000];
+                StringBuffer sb0 = (ubxI == 0 ? new StringBuffer() : null);
                 while (true) {
                     int x = inputStream.read(buff);
                     if (x != -1) {
-                        //Log.i("hhanglogX", String.format("thread %d bytes %d %x", threadcount, x, buff[0]));
-                        recudp.writefostreamUBX(ubxI, buff, x);
-                        sleep(20);
+                        if (sb0 != null) {
+                            sb0.append(new String(buff, 0, x));
+                            while (true) {
+                                int il = sb0.indexOf("\n");
+                                if (il == -1)
+                                    break;
+                                recudp.writefostream(sb0.substring(0, il+1).getBytes(), il+1);
+                                sb0.delete(0, il+1);
+                            }
+                        } else {
+                            //Log.i("hhanglogX", String.format("thread %d bytes %d %x", threadcount, x, buff[0]));
+                            recudp.writefostreamUBX(ubxI, buff, x);
+                        }
+                        sleep(10);
                     }
                 }
 
-            // connection in from PC wanting data to be forewarded to it (hand over socket and terminate thread)
-            } else if ((h0 == '-') && (h1 == h2) && (h1 == h3) && (h1 >= 'A') && (h1 <= 'C')) {
-                int subxI = h1 - 'A';
+            // connection in from PC wanting data to be forwarded to it (hand over socket and terminate thread)
+            } else if ((h0 == '-') && (h1 == h2) && (h1 == h3) && (h1 >= '@') && (h1 <= 'C')) {
+                int subxI = h1 - '@';
                 Log.i("hhanglogX pcforward", String.format("thread %d ubxI %d", threadcount, subxI));
                 if (recudp.pcforwardsockets[subxI] != null) {
                     try {
@@ -152,51 +165,6 @@ class SocketServerThread extends Thread {
 }
 
 
-// Needs to use threads because socket.receive() hangs.
-// The UBX UDP has ports 9020-2, and normal logging is on port 9019
-
-class RecUBXUDP extends Thread {
-    // separate threads, buw which go through RecUDP as the interface
-    RecUDP recudp;
-    int ubxI;
-    String ubxILetter;
-
-    RecUBXUDP(RecUDP lrecudp, int lubxI) {
-        recudp = lrecudp;
-        ubxI = lubxI;
-        ubxILetter = (ubxI == 0 ? "A" : (ubxI == 1 ? "B" : "C"));
-    }
-
-    @Override
-    public void run() {
-        while (true) {
-            boolean bgood = false;
-            try {
-                if (recudp.socketUBX[ubxI] != null) {
-                    recudp.socketUBX[ubxI].receive(recudp.dpUBX[ubxI]); // this then timesout after 100
-                    recudp.llog3.lepicipnumubx[ubxI] = String.format("r%s %s:%d", ubxILetter, recudp.dpUBX[ubxI].getAddress().getHostAddress(), recudp.dpUBX[ubxI].getPort());
-                    recudp.writefostreamUBX(ubxI, recudp.dpUBX[ubxI].getData(), recudp.dpUBX[ubxI].getLength());
-                    bgood = true;
-                }
-            } catch (SocketTimeoutException e) {
-                ; //Log.i("hanglog7ubx", String.valueOf(e));
-            } catch (SocketException e) {
-                Log.i("hhanglog5ubx", e.getMessage());
-            } catch (IOException e) {
-                Log.i("hhanglog6ubx", e.getMessage());
-            }
-
-            if (!bgood) {   // avoid busy loop on excepting
-                try {
-                    sleep(200);
-                } catch (InterruptedException e) {
-                    Log.i("hhanglogIubx", e.getMessage());
-                }
-            }
-        }
-    }
-}
-
 
 class RecUDP extends Thread {
     DatagramSocket socket;
@@ -206,25 +174,17 @@ class RecUDP extends Thread {
     InetAddress iipnumpc = null;
     int port = 9019;
 
-    DatagramSocket[] socketUBX = new DatagramSocket[3];
-    DatagramPacket[] dpUBX = new DatagramPacket[3];
-    int[] portUBX = { 9020, 9021, 9022 };
-    int[] ubxbytesP = {0, 0, 0};
-
-    InetAddress iipnumesp = null;
-    int espport = 0;
+    int[] ubxbytesP = {0, 0, 0, 0};
 
     long mstamp0 = 0;
     int fostreamlinesP = 0;
     int fostreamlines = 0;
     String fname = null;
-    File fdata;
-    FileOutputStream fostream = null;
-    File[] fdataUBX = new File[3];
-    FileOutputStream[] fostreamUBX = new FileOutputStream[3];
-    SocketServerReplyThread[] fosocketthread = new SocketServerReplyThread[3];
-    Socket[] pcforwardsockets = new Socket[3];
-    OutputStream[] pcforwardoutputStreams = new OutputStream[3];
+    File[] fdataUBX = new File[4];
+    FileOutputStream[] fostreamUBX = new FileOutputStream[4];
+    SocketServerReplyThread[] fosocketthread = new SocketServerReplyThread[4];
+    Socket[] pcforwardsockets = new Socket[4];
+    OutputStream[] pcforwardoutputStreams = new OutputStream[4];
 
     Queue<String> phonesensorqueue = null;
     String mstampsensorD0;
@@ -253,22 +213,12 @@ class RecUDP extends Thread {
             socket.setSoTimeout(800);
             //if (llog3.bhotspotmode)
             //    socket.bind(new InetSocketAddress(port));
-
-            for (int i = 0; i < 3; i++) {
-                socketUBX[i] = new DatagramSocket(portUBX[i]);
-                socketUBX[i].setSoTimeout(800);
-            }
-
         } catch (SocketException e) {
             Log.i("hhanglog15", e.getMessage());
             llog3.lepicipnum = "socketfail:"+e.getMessage();
         }
         byte[] lMsg = new byte[200];
         dp = new DatagramPacket(lMsg, lMsg.length);
-        for (int i = 0; i < 3; i++) {
-            byte[] lMsgUBX = new byte[1900];
-            dpUBX[i] = new DatagramPacket(lMsgUBX, lMsgUBX.length);
-        }
     }
 
     // these two functions open and close the logging file
@@ -280,7 +230,7 @@ class RecUDP extends Thread {
         TimeZone timeZoneUTC = TimeZone.getTimeZone("UTC");
         Calendar rightNow = Calendar.getInstance(timeZoneUTC);
 
-        SimpleDateFormat ddsdf = new SimpleDateFormat("ddHHmmss");
+        SimpleDateFormat ddsdf = new SimpleDateFormat("yyyyMMddHHmmss");
         ddsdf.setTimeZone(timeZoneUTC);
         File ddir = new File(fdir, ddsdf.format(rightNow.getTime()));
         //String currentDateandTime = new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new Date());
@@ -288,24 +238,24 @@ class RecUDP extends Thread {
         SimpleDateFormat dsdf = new SimpleDateFormat("'hdata-'yyyy-MM-dd'_'HH-mm-ss");
         dsdf.setTimeZone(timeZoneUTC);
         fname = dsdf.format(rightNow.getTime());
-        fdata = new File(ddir, fname+".log");
-        fdata.setReadable(true, false); // doesn't succeed at making it seen from PC, until the File Manager has poked it
-        fdataUBX[0] = new File(ddir, fname + "A.ubx");
-        fdataUBX[1] = new File(ddir, fname + "B.ubx");
-        fdataUBX[2] = new File(ddir, fname + "C.ubx");
+        fdataUBX[0] = new File(ddir, fname + ".log");
+        fdataUBX[1] = new File(ddir, fname + "A.ubx");
+        fdataUBX[2] = new File(ddir, fname + "B.ubx");
+        fdataUBX[3] = new File(ddir, fname + "C.ubx");
         fostreamlinesP = 0;
         fostreamlines = 0;
         ubxbytesP[0] = 0;
         ubxbytesP[1] = 0;
         ubxbytesP[2] = 0;
+        ubxbytesP[3] = 0;
 
         try {
             ddir.mkdirs();
-            fostream = new FileOutputStream(fdata);
+            fostreamUBX[0] = new FileOutputStream(fdataUBX[0]);  // log file
             String header = "HangPhoneUDPlog "+fname+"\n\n";
-            fostream.write(header.getBytes(), 0, header.length());
-            Log.i("hhanglogFFout", String.valueOf(fdata));
-            for (int i = 0; i < 3; i++)
+            fostreamUBX[0].write(header.getBytes(), 0, header.length());
+            Log.i("hhanglogFFout", String.valueOf(fostreamUBX[0]));
+            for (int i = 1; i < 4; i++)
                 fostreamUBX[i] = null;
         } catch (FileNotFoundException e) {
             Log.i("hhanglogFF", String.valueOf(e));
@@ -317,31 +267,21 @@ class RecUDP extends Thread {
         phonesensorqueue.clear();
         phonesensorqueue.add(String.format("aRt%08Xd\"%s\"\n", 0, mstampsensorD0));
 
-        return fdata.toString();
+        return fdataUBX[0].toString();
         //return fdir + "\n" + fname;
     }
 
     public String StopLogging() {
-        if (fostream != null) {
-            FileOutputStream lfostream = fostream;
-            fostream = null;
-            try {
-                String footer = String.format("End(%d,%d)\n", fostreamlines, fostreamlinesP);
-                lfostream.write(footer.getBytes(), 0, footer.length());
-                lfostream.flush();
-                lfostream.close();
-                Log.i("hhanglogFFout", footer);
-            } catch (IOException e) {
-                Log.i("hhanglogI", String.valueOf(e));
-                return (e.toString() + " Please set storage permissions");
-            }
-        }
-        for (int i = 0; i < 3; i++) {
+        for (int i = 0; i < 4; i++) {
             FileOutputStream lfostreamUBX = fostreamUBX[i];
             if (lfostreamUBX != null) {
                 fostreamUBX[i] = null;
                 fdataUBX[i] = null;
                 try {
+                    if (i == 0) {
+                        String footer = String.format("End(%d,%d)\n", fostreamlines, fostreamlinesP);
+                        lfostreamUBX.write(footer.getBytes(), 0, footer.length());
+                    }
                     lfostreamUBX.flush();
                     lfostreamUBX.close();
                 } catch (IOException e) {
@@ -382,7 +322,7 @@ class RecUDP extends Thread {
     }
 
     public void writefostream(byte[] data, int leng) throws IOException {
-        FileOutputStream lfostream = fostream; // protect null pointers from thread conditions
+        FileOutputStream lfostream = fostreamUBX[0]; // protect null pointers from thread conditions
         if (lfostream != null)
             lfostream.write(data, 0, leng);
 
@@ -420,7 +360,7 @@ class RecUDP extends Thread {
                         llog3.lepicipnum = null;
                     }
 
-                    for (int i = 0; i < 3; i++) {
+                    for (int i = 1; i < 4; i++) {
                         if (llog3.lepicipnumubx[i] != null) {
                             llog3.epicipnumubx[i].setText(llog3.lepicipnumubx[i]);
                             llog3.lepicipnumubx[i] = null;

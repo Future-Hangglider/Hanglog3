@@ -28,16 +28,15 @@ public class LLog3 extends AppCompatActivity {
     TextView epicipnum;
     EditText epicfile;
 
-    String[] lepicipnumubx = new String[3];
-    TextView[] epicipnumubx = new TextView[3];
-    TextView[] epicubxbytes = new TextView[3];
+    String[] lepicipnumubx = new String[4];
+    TextView[] epicipnumubx = new TextView[4];
+    TextView[] epicubxbytes = new TextView[4];
 
     int nepic = 0;
     boolean bhotspotmode;
 
     ReadSensor readsensor;
     RecUDP recudp;
-    RecUBXUDP[] recubxudp = new RecUBXUDP[3];
     SocketServerThread socketserverthread;
 
     FileOutputStream fostream;
@@ -58,12 +57,14 @@ public class LLog3 extends AppCompatActivity {
         epicfile = (EditText)findViewById(R.id.epicfile);
         tiltyview = (ImageView)findViewById(R.id.tiltyview); // too early to make tiltycanvas
 
-        epicipnumubx[0] = (TextView)findViewById(R.id.epicipnumubxA);
-        epicubxbytes[0] = (TextView)findViewById(R.id.epicubxbytesA);
-        epicipnumubx[1] = (TextView)findViewById(R.id.epicipnumubxB);
-        epicubxbytes[1] = (TextView)findViewById(R.id.epicubxbytesB);
-        epicipnumubx[2] = (TextView)findViewById(R.id.epicipnumubxC);
-        epicubxbytes[2] = (TextView)findViewById(R.id.epicubxbytesC);
+        epicipnumubx[0] = null;
+        epicubxbytes[0] = null;
+        epicipnumubx[1] = (TextView)findViewById(R.id.epicipnumubxA);
+        epicubxbytes[1] = (TextView)findViewById(R.id.epicubxbytesA);
+        epicipnumubx[2] = (TextView)findViewById(R.id.epicipnumubxB);
+        epicubxbytes[2] = (TextView)findViewById(R.id.epicubxbytesB);
+        epicipnumubx[3] = (TextView)findViewById(R.id.epicipnumubxC);
+        epicubxbytes[3] = (TextView)findViewById(R.id.epicubxbytesC);
 
         readsensor = new ReadSensor((SensorManager)getSystemService(Context.SENSOR_SERVICE),
                                     (LocationManager)getSystemService(Context.LOCATION_SERVICE));
@@ -82,10 +83,6 @@ public class LLog3 extends AppCompatActivity {
         // older original UDP technology
         recudp = new RecUDP(readsensor.phonesensorqueue, readsensor.mstampsensorD0, this);
         recudp.start();
-        for (int i = 0; i < 3; i++) {
-            recubxudp[i] = new RecUBXUDP(recudp, i);
-            recubxudp[i].start();
-        }
 
         Switch gologgingswitch = (Switch)findViewById(R.id.gologgingswitch);
         gologgingswitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
