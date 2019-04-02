@@ -12,15 +12,10 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
-import java.net.UnknownHostException;
-import java.nio.ByteBuffer;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Queue;
@@ -91,17 +86,25 @@ class SocketServerReplyThread extends Thread {
             } else if ((h0 == '-') && (h1 == h2) && (h1 == h3) && (h1 >= '@') && (h1 <= 'C')) {
                 int subxI = h1 - '@';
                 Log.i("hhanglogX pcforward", String.format("thread %d ubxI %d", threadcount, subxI));
-                if (recudp.pcforwardsockets[subxI] != null) {
-                    try {
-                        recudp.pcforwardsockets[subxI].close();
-                    } catch (IOException e) {
-                        ;
-                    }
+
+                int i = 0;
+                while (i < recudp.Npcforwardsockets) {
+                    if (recudp.pcforwardsockets[i] == null)
+                        break;
+                    i++;
                 }
-                recudp.pcforwardsockets[subxI] = hostThreadSocket;
-                recudp.pcforwardoutputStreams[subxI] = recudp.pcforwardsockets[subxI].getOutputStream();
+                if (i == recudp.Npcforwardsockets) {
+                    if (recudp.Npcforwardsockets < 10)
+                        recudp.Npcforwardsockets++;
+                    else
+                        i = 0;
+                }
+                Log.i("hhanglogX pcforward", String.format("thread %d ubxI %d i%d", threadcount, subxI, i));
+                recudp.pcforwardsocketsI[i] = subxI;
+                recudp.pcforwardsockets[i] = hostThreadSocket;
+                recudp.pcforwardoutputStreams[i] = recudp.pcforwardsockets[i].getOutputStream();
                 hostThreadSocket = null;
-                return;
+                return;  // note shortcut out
             }
         } catch (IOException e) {
             e.printStackTrace();
@@ -167,13 +170,6 @@ class SocketServerThread extends Thread {
 
 
 class RecUDP extends Thread {
-    DatagramSocket socket;
-    DatagramPacket dp;
-
-    // this is where we send and receive the datagram values to
-    InetAddress iipnumpc = null;
-    int port = 9019;
-
     int[] ubxbytesP = {0, 0, 0, 0};
 
     long mstamp0 = 0;
@@ -183,8 +179,11 @@ class RecUDP extends Thread {
     File[] fdataUBX = new File[4];
     FileOutputStream[] fostreamUBX = new FileOutputStream[4];
     SocketServerReplyThread[] fosocketthread = new SocketServerReplyThread[4];
-    Socket[] pcforwardsockets = new Socket[4];
-    OutputStream[] pcforwardoutputStreams = new OutputStream[4];
+
+    int[] pcforwardsocketsI = new int[10]; // can forward to more than one socket
+    Socket[] pcforwardsockets = new Socket[10];
+    OutputStream[] pcforwardoutputStreams = new OutputStream[10];
+    int Npcforwardsockets = 0;
 
     Queue<String> phonesensorqueue = null;
     String mstampsensorD0;
@@ -197,28 +196,6 @@ class RecUDP extends Thread {
         phonesensorqueue = lphonesensorqueue;
         llog3 = lllog3;
         mstampsensorD0 = lmstampsensorD0;
-
-        String ipnumpc = (llog3.bhotspotmode ? "192.168.43.1"   // default for android
-                                             : "192.168.4.1");  // default for esp8266
-
-        Log.i("hhanglog22", "RecUDP");
-        try {
-            iipnumpc = InetAddress.getByName(ipnumpc);
-        } catch (UnknownHostException e) {
-            Log.i("hhanglog22", e.getMessage());
-        }
-
-        try {
-            socket = new DatagramSocket(port);
-            socket.setSoTimeout(800);
-            //if (llog3.bhotspotmode)
-            //    socket.bind(new InetSocketAddress(port));
-        } catch (SocketException e) {
-            Log.i("hhanglog15", e.getMessage());
-            llog3.lepicipnum = "socketfail:"+e.getMessage();
-        }
-        byte[] lMsg = new byte[200];
-        dp = new DatagramPacket(lMsg, lMsg.length);
     }
 
     // these two functions open and close the logging file
@@ -307,14 +284,18 @@ class RecUDP extends Thread {
 
         ubxbytesP[ubxI] += leng;
 
-        Socket lpcforwardsocket = pcforwardsockets[ubxI];
-        if (lpcforwardsocket != null) {
-            try {
-                pcforwardoutputStreams[ubxI].write(data, 0, leng);
-            } catch (IOException e) {
-                pcforwardsockets[ubxI] = null;
-                pcforwardoutputStreams[ubxI] = null;
-                lpcforwardsocket.close();
+        for (int i = 0; i < Npcforwardsockets; i++) {
+            Socket lpcforwardsocket = pcforwardsockets[i];
+            OutputStream lpcforwardoutputStream = pcforwardoutputStreams[i];
+            if ((pcforwardsocketsI[i] == ubxI) && (lpcforwardsocket != null) && (lpcforwardoutputStream != null)) {
+                try {
+                    lpcforwardoutputStream.write(data, 0, leng);
+                } catch (IOException e) {
+                    pcforwardsockets[i] = null;
+                    pcforwardoutputStreams[i] = null;
+                    Log.i("hhanglogX pcforward close", String.format("ubxI %d %d", ubxI, i));
+                    lpcforwardsocket.close();
+                }
             }
         }
 
@@ -386,23 +367,6 @@ class RecUDP extends Thread {
                     if (phonesensorrep == null)
                         break;
                     writefostream(phonesensorrep.getBytes(), phonesensorrep.length());
-                }
-
-                if ((msgtosend != null) && (socket != null)) {  // first send a message to the ESP UDP channel so it knows we want to hear from it.
-                    String lmsgtosend = msgtosend;
-                    Log.i("hhanglogE", lmsgtosend);
-                    msgtosend = null;
-                    llog3.lepicipnum = String.format("s %s:%d", iipnumpc.getHostAddress(), port);
-                    socket.send(new DatagramPacket(lmsgtosend.getBytes(), lmsgtosend.length(), iipnumpc, port));
-                }
-
-                if (socket != null) {
-                    socket.receive(dp); // this timesout after 100
-
-                    llog3.lepicipnum = String.format("r %s:%d", dp.getAddress().getHostAddress(), dp.getPort());
-                    Log.i("hhanglogG", dp.toString());
-                    writefostream(dp.getData(), dp.getLength());
-                    bgood = true;
                 }
             } catch (SocketTimeoutException e) {
                 ; //Log.i("hanglog7", String.valueOf(e));
