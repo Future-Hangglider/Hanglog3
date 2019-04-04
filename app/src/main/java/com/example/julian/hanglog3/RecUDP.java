@@ -22,6 +22,8 @@ import java.util.Queue;
 import java.util.TimeZone;
 
 
+
+
 class SocketServerReplyThread extends Thread {
     Socket hostThreadSocket;
     int threadcount;
@@ -50,6 +52,7 @@ class SocketServerReplyThread extends Thread {
             Log.i("hhanglogX", String.format("thread%d bytes %x %x %x %x", threadcount, h0, h1, h2, h3));
 
             // connection from ESP32 with data; @ABC
+            // (incoming data loop)
             if ((h0 == h1) && (h0 == h2) && (h0 == h3) && (h0 >= '@') && (h0 <= 'C')) {
                 ubxI = h0 - '@';
                 ubxILetter = (char)h0;
@@ -58,14 +61,15 @@ class SocketServerReplyThread extends Thread {
                     recudp.fosocketthread[ubxI].closethesocket();
                 }
                 recudp.fosocketthread[ubxI] = this;
-                recudp.llog3.lepicipnumubx[ubxI] = String.format("r%s %s:%d", ubxILetter, hostThreadSocket.getInetAddress().getCanonicalHostName(), -1);
+                recudp.llog3.lepicipnumubx[ubxI] = String.format("r%s %s,%d", ubxILetter, hostThreadSocket.getInetAddress().getCanonicalHostName(), llog3.lepicipnumubxPCconns[ubxI]);
 
                 byte[] buff = new byte[1000];
                 StringBuffer sb0 = (ubxI == 0 ? new StringBuffer() : null);
+
                 while (true) {
                     int x = inputStream.read(buff);
                     if (x != -1) {
-                        if (sb0 != null) {
+                        if (ubxI == 0) {  // ascii hanglog stream
                             sb0.append(new String(buff, 0, x));
                             while (true) {
                                 int il = sb0.indexOf("\n");
@@ -74,7 +78,7 @@ class SocketServerReplyThread extends Thread {
                                 recudp.writefostream(sb0.substring(0, il+1).getBytes(), il+1);
                                 sb0.delete(0, il+1);
                             }
-                        } else {
+                        } else {  // normal UBX byte stream
                             //Log.i("hhanglogX", String.format("thread %d bytes %d %x", threadcount, x, buff[0]));
                             recudp.writefostreamUBX(ubxI, buff, x);
                         }
@@ -82,7 +86,8 @@ class SocketServerReplyThread extends Thread {
                     }
                 }
 
-            // connection in from PC wanting data to be forwarded to it (hand over socket and terminate thread)
+            // connection in from PC wanting data to be forwarded to it (may be multiple connections)
+            // (outgoing data handover)
             } else if ((h0 == '-') && (h1 == h2) && (h1 == h3) && (h1 >= '@') && (h1 <= 'C')) {
                 int subxI = h1 - '@';
                 Log.i("hhanglogX pcforward", String.format("thread %d ubxI %d", threadcount, subxI));
@@ -100,12 +105,36 @@ class SocketServerReplyThread extends Thread {
                         i = 0;
                 }
                 Log.i("hhanglogX pcforward", String.format("thread %d ubxI %d i%d", threadcount, subxI, i));
+                llog3.lepicipnumubxPCconns[subxI]++;
+                recudp.llog3.lepicipnumubx[subxI] = String.format("r%s %s,%d", (char)h0, hostThreadSocket.getInetAddress().getCanonicalHostName(), llog3.lepicipnumubxPCconns[subxI]);
                 recudp.pcforwardsocketsI[i] = subxI;
                 recudp.pcforwardsockets[i] = hostThreadSocket;
                 recudp.pcforwardoutputStreams[i] = recudp.pcforwardsockets[i].getOutputStream();
                 hostThreadSocket = null;
-                return;  // note shortcut out
+                return;  // note shortcut out due to hand-over of socket to an array of outputs (so thread no longer needed)
+
+            // connection from PC wanting to forward signals to the ESP device
+            // (message from PC to ESP loop)
+            } else if ((h0 == '+') && (h1 == h2) && (h1 == h3) && (h1 >= '@') && (h1 <= 'C')) {
+                int subxI = h1 - '@';
+
+                Log.i("hhanglogX pcmessage", String.format("thread %d ubxI %d", threadcount, subxI));
+                SocketServerReplyThread ssrt = recudp.fosocketthread[subxI];
+                if (ssrt != null) {
+                    OutputStream espoutputStream = ssrt.hostThreadSocket.getOutputStream();
+                    InputStream pcinputStream = hostThreadSocket.getInputStream();
+                    espoutputStream.write((String.format("Hello from Android msg relay %d\n", subxI)).getBytes());
+                    byte[] buff = new byte[1000];
+                    while (true) {
+                        int x = pcinputStream.read(buff);
+                        Log.i("hhanglogX", String.format("SocketServerReplyThread ubxI=%d relaying %d bytes", ubxI, x));
+                        if (x != -1)
+                            espoutputStream.write(buff, 0, x);
+                        sleep(10);
+                    }
+                }
             }
+
         } catch (IOException e) {
             e.printStackTrace();
         } catch (InterruptedException e) {
