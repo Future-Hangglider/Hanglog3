@@ -121,17 +121,23 @@ class SocketServerReplyThread extends Thread {
                 Log.i("hhanglogX pcmessage", String.format("thread %d ubxI %d", threadcount, subxI));
                 SocketServerReplyThread ssrt = recudp.fosocketthread[subxI];
                 if (ssrt != null) {
+                    llog3.lepiccountubxPCmsgs[subxI] += 10;
                     OutputStream espoutputStream = ssrt.hostThreadSocket.getOutputStream();
                     InputStream pcinputStream = hostThreadSocket.getInputStream();
                     espoutputStream.write((String.format("Hello from Android msg relay %d\n", subxI)).getBytes());
                     byte[] buff = new byte[1000];
+                    llog3.lepiccountubxPCmsgs[subxI] = 1;
                     while (true) {
                         int x = pcinputStream.read(buff);
-                        Log.i("hhanglogX", String.format("SocketServerReplyThread ubxI=%d relaying %d bytes", ubxI, x));
-                        if (x != -1)
+                        if (x != -1) {
+                            Log.i("hhanglogX", String.format("SocketServerReplyThread ubxI=%d relaying %d bytes", subxI, x));
                             espoutputStream.write(buff, 0, x);
+                            llog3.lepiccountubxPCmsgs[subxI]++;
+                        }
                         sleep(10);
                     }
+                } else {
+                    Log.i("hhanglogX pcmessage nohostsocket", String.format("thread %d ubxI %d", threadcount, subxI));
                 }
             }
 
@@ -200,6 +206,7 @@ class SocketServerThread extends Thread {
 
 class RecUDP extends Thread {
     int[] ubxbytesP = {0, 0, 0, 0};
+    int[] ubxbytesPD = {0, 0, 0, 0};
 
     long mstamp0 = 0;
     int fostreamlinesP = 0;
@@ -312,6 +319,7 @@ class RecUDP extends Thread {
             lfostreamUBX.write(data, 0, leng);
 
         ubxbytesP[ubxI] += leng;
+        ubxbytesPD[ubxI] = 0;
 
         for (int i = 0; i < Npcforwardsockets; i++) {
             Socket lpcforwardsocket = pcforwardsockets[i];
@@ -375,7 +383,12 @@ class RecUDP extends Thread {
                             llog3.epicipnumubx[i].setText(llog3.lepicipnumubx[i]);
                             llog3.lepicipnumubx[i] = null;
                         }
-                        llog3.epicubxbytes[i].setText(String.format("UBX(%d)", ubxbytesP[i]));
+                        if (llog3.lepiccountubxPCmsgs[i] == 0)
+                            llog3.epicubxbytes[i].setText(String.format("UBX(%d)", ubxbytesP[i]));
+                        else
+                            llog3.epicubxbytes[i].setText(String.format("UBX(%d)%d", ubxbytesP[i], llog3.lepiccountubxPCmsgs[i]));
+                        llog3.epicubxbytes[i].setBackgroundColor(ubxbytesPD[i] <= 3 ? 0xFFCCFFCC : 0xFFFFCCCC);
+                        ubxbytesPD[i]++;
                     }
                 }
             });

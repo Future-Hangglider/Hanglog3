@@ -30,6 +30,7 @@ public class LLog3 extends AppCompatActivity {
 
     String[] lepicipnumubx = new String[4];
     int[] lepicipnumubxPCconns = new int[4];
+    int[] lepiccountubxPCmsgs = new int[4];
     TextView[] epicipnumubx = new TextView[4];
     TextView[] epicubxbytes = new TextView[4];
 
