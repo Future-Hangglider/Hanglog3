@@ -16,6 +16,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
+import java.net.UnknownHostException;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Queue;
@@ -49,7 +50,7 @@ class SocketServerReplyThread extends Thread {
             int h1 = inputStream.read();
             int h2 = inputStream.read();
             int h3 = inputStream.read();
-            Log.i("hhanglogX", String.format("thread%d bytes %x %x %x %x", threadcount, h0, h1, h2, h3));
+            Log.i("hhanglogX", String.format("thread%d socket incoming bytes %x %x %x %x", threadcount, h0&0xFF, h1&0xFF, h2&0xFF, h3&0xFF));
 
             // connection from ESP32 with data; @ABC
             // (incoming data loop)
@@ -138,6 +139,10 @@ class SocketServerReplyThread extends Thread {
                     }
                 } else {
                     Log.i("hhanglogX pcmessage nohostsocket", String.format("thread %d ubxI %d", threadcount, subxI));
+                    if (llog3.lepiccountubxPCmsgs[subxI] >= 0)
+                        llog3.lepiccountubxPCmsgs[subxI] = -1;
+                    else
+                        llog3.lepiccountubxPCmsgs[subxI]--;
                 }
             }
 
@@ -215,6 +220,12 @@ class RecUDP extends Thread {
     File[] fdataUBX = new File[4];
     FileOutputStream[] fostreamUBX = new FileOutputStream[4];
     SocketServerReplyThread[] fosocketthread = new SocketServerReplyThread[4];
+
+    String ddhost = null; // set this to request socket to open
+    int ddport = -1;
+    Socket ddsocketup = null;
+    OutputStream ddsocketupstream = null;
+    int ubxIddsocketup = -1;
 
     int[] pcforwardsocketsI = new int[10]; // can forward to more than one socket
     Socket[] pcforwardsockets = new Socket[10];
@@ -306,7 +317,43 @@ class RecUDP extends Thread {
         return "closed";
     }
 
-    // this is where we separate out multiple UBX streams from different ipnumbers
+    // epicfile.setText(recudp.StartDDSocket());
+    public String StartDDSocket() {
+        assert ddsocketup == null;
+        ddport = 4006;
+        ddhost = "node-red.dynamicdevices.co.uk";
+        //ddhost = "144.76.167.54";
+        Log.i("hhanglog78", ddhost);
+
+        ubxIddsocketup = 3;
+        for (int i = 1; i <= 3; i++) {
+            if (ubxbytesP[i] != 0)
+                ubxIddsocketup = i;
+        }
+        return String.format("uploading ubx%d to %s:%d", ubxIddsocketup, ddhost, ddport);
+    }
+
+    public String StopDDSocket() {
+        ddhost = null;
+        ddport = -1;
+
+        if (ddsocketup != null) {
+            try {
+                ddsocketup.close();
+            } catch (SocketException e) {
+                Log.i("hhanglog5d", e.getMessage());
+            } catch (IOException e) {
+                Log.i("hhanglog6d", e.getMessage());
+            }
+        }
+        ddsocketup = null;
+        ddsocketupstream = null;
+        ubxIddsocketup = -1;
+        return "closed";
+    }
+
+
+        // this is where we separate out multiple UBX streams from different ipnumbers
     public void writefostreamUBX(int ubxI, byte[] data, int leng) throws IOException {
         try {
         if ((fdataUBX[ubxI] != null) && (fostreamUBX[ubxI] == null) && (ubxbytesP[ubxI] == 0))
@@ -318,8 +365,54 @@ class RecUDP extends Thread {
         if (lfostreamUBX != null)
             lfostreamUBX.write(data, 0, leng);
 
+        // create socket if required (can't be done on main thread)
+        if (ubxI == ubxIddsocketup) {
+            if ((ddsocketup == null) && (ddhost != null)) {
+                try {
+                    Log.i("hhanglog78", ddhost);
+                    ddsocketup = new Socket(ddhost, ddport);
+                    Log.i("hhanglog7999", ddhost);
+                    ddsocketupstream = ddsocketup.getOutputStream();
+                } catch (UnknownHostException e) {
+                    Log.i("hhanglog7d", e.getMessage());
+                    ddhost = null;
+                } catch (SocketException e) {
+                    Log.i("hhanglog8d", e.getMessage());
+                    ddhost = null;
+                } catch (IOException e) {
+                    Log.i("hhanglog8d", e.getMessage());
+                    ddhost = null;
+                } catch (SecurityException e) {
+                    Log.i("hhanglog8d", e.getMessage());
+                    ddhost = null;
+                }
+            }
+            if ((ddsocketup != null) && (ddhost == null)) {
+                try {
+                    ddsocketup.close();
+                } catch (SocketException e) {
+                    Log.i("hhanglog5d", e.getMessage());
+                } catch (IOException e) {
+                    Log.i("hhanglog6d", e.getMessage());
+                }
+                ddsocketup = null;
+                ddsocketupstream = null;
+                ubxIddsocketup = -1;
+            }
+            try {
+                ddsocketupstream.write(data, 0, leng);
+            } catch (IOException e) {
+                Log.i("hhanglogFFp", String.valueOf(e));
+            }
+        }
+
         ubxbytesP[ubxI] += leng;
-        ubxbytesPD[ubxI] = 0;
+        for (int i = 0; i < leng; i++) {
+            if (data[i] != 0) {   // reset to green colour only if there is a non-zero byte to warn against empty data being returned.
+                ubxbytesPD[ubxI] = 0;
+                break;
+            }
+        }
 
         for (int i = 0; i < Npcforwardsockets; i++) {
             Socket lpcforwardsocket = pcforwardsockets[i];

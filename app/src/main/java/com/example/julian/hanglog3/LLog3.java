@@ -100,16 +100,17 @@ public class LLog3 extends AppCompatActivity {
             }
         });
 
-
-        Button btn = (Button)findViewById(R.id.btnepic);
-        btn.setOnClickListener(new View.OnClickListener() {
+        Switch goddsocketswitch = (Switch)findViewById(R.id.goddsocketswitch);
+        goddsocketswitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override
-            public void onClick(View view) {
-                Log.i("hhanglogE", "epic");
-                String str = "epic" + String.valueOf(nepic++)+"\n";
-                //outmonitor.append(str);
-                if (recudp != null)
-                    recudp.msgtosend = str;
+            public void onCheckedChanged(CompoundButton c, boolean isChecked) {
+                if (isChecked) {
+                    epicfile.setBackgroundColor(0xFF8888FF);
+                    epicfile.setText(recudp.StartDDSocket());
+                } else {
+                    epicfile.setBackgroundColor(0xFFFF8888);
+                    recudp.StopDDSocket();
+                }
             }
         });
 

@@ -6,15 +6,6 @@
     android:layout_height="match_parent"
     tools:context=".LLog3">
 
-    <Button
-        android:id="@+id/btnepic"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginLeft="28dp"
-        android:text="Ping UDP"
-        app:layout_constraintLeft_toLeftOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
-
     <TextView
         android:id="@+id/epicwords"
         android:layout_width="339dp"
@@ -141,7 +132,7 @@
         android:layout_marginTop="56dp"
         android:ems="10"
         android:inputType="textMultiLine"
-        android:text="filename"
+        android:text="filename (v20)"
         android:textSize="18dp"
         android:background="#ff8888"
         app:layout_constraintLeft_toLeftOf="parent"
@@ -152,9 +143,20 @@
         android:id="@+id/gologgingswitch"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginStart="136dp"
+        android:layout_marginStart="32dp"
         android:layout_marginTop="16dp"
         android:text="Go Logging"
+        app:layout_constraintLeft_toLeftOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <Switch
+        android:id="@+id/goddsocketswitch"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="184dp"
+        android:layout_marginTop="16dp"
+        android:text="Go DDsocket"
         app:layout_constraintLeft_toLeftOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
