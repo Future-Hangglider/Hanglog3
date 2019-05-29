@@ -3,7 +3,11 @@ package com.example.julian.hanglog3;
 // something about intent indexing in the manifest I don't understand
 // https://developer.android.com/studio/write/app-link-indexing#java
 
+import android.app.Service;
+import android.content.Intent;
+import android.os.Binder;
 import android.os.Environment;
+import android.os.IBinder;
 import android.util.Log;
 
 import java.io.File;
@@ -209,7 +213,7 @@ class SocketServerThread extends Thread {
 
 
 
-class RecUDP extends Thread {
+class RecUDP extends Service {
     int[] ubxbytesP = {0, 0, 0, 0};
     int[] ubxbytesPD = {0, 0, 0, 0};
 
@@ -353,7 +357,7 @@ class RecUDP extends Thread {
     }
 
 
-        // this is where we separate out multiple UBX streams from different ipnumbers
+    // this is where we separate out multiple UBX streams from different ipnumbers
     public void writefostreamUBX(int ubxI, byte[] data, int leng) throws IOException {
         try {
         if ((fdataUBX[ubxI] != null) && (fostreamUBX[ubxI] == null) && (ubxbytesP[ubxI] == 0))
@@ -362,8 +366,10 @@ class RecUDP extends Thread {
             Log.i("hhanglogFFu", String.valueOf(e));
         }
         FileOutputStream lfostreamUBX = fostreamUBX[ubxI];
-        if (lfostreamUBX != null)
+        if (lfostreamUBX != null) {
             lfostreamUBX.write(data, 0, leng);
+            lfostreamUBX.flush();
+        }
 
         // create socket if required (can't be done on main thread)
         if (ubxI == ubxIddsocketup) {
@@ -491,8 +497,9 @@ class RecUDP extends Thread {
 
     // this gets to the threading object which sits on socket.receive
     public String msgtosend = null;
-    @Override
-    public void run() {
+
+    //@Override
+    public void trun(Thread t) {
         while (true) {
             boolean bgood = false;
             try {
@@ -513,12 +520,53 @@ class RecUDP extends Thread {
 
             if (!bgood) {   // avoid busy loop on excepting
                 try {
-                    sleep(200);
+                    t.sleep(200);
                 } catch (InterruptedException e) {
                     Log.i("hhanglogI", e.getMessage());
                 }
             }
         }
     }
+
+    Thread thr = null;
+    @Override
+    public int onStartCommand(final Intent intent, int flags, final int startId) {
+        thr = new Thread("MyService(" + startId + ")") {
+            @Override
+            public void run() {
+                trun(thr);
+                stopSelf();
+            }
+        };
+        thr.start();
+        return 0;
+    }
+
+    private final IBinder mBinder = new Binder();
+
+    @Override
+    public IBinder onBind(Intent intent) {
+        return mBinder;
+    }
+
+/*    @Override
+    public void onCreate() {
+        // The service is being created
+    }
+    @Override
+    public boolean onUnbind(Intent intent) {
+        // All clients have unbound with unbindService()
+        return false;
+    }
+    @Override
+    public void onRebind(Intent intent) {
+        // A client is binding to the service with bindService(),
+        // after onUnbind() has already been called
+    }
+    @Override
+    public void onDestroy() {
+        // The service is no longer used and is being destroyed
+    }
+*/
 }
 

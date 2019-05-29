@@ -1,6 +1,10 @@
 package com.example.julian.hanglog3;
 
+import android.app.Notification;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.content.Context;
+import android.content.Intent;
 import android.hardware.SensorManager;
 import android.location.LocationManager;
 import android.net.wifi.WifiManager;
@@ -84,7 +88,17 @@ public class LLog3 extends AppCompatActivity {
 
         // older original UDP technology
         recudp = new RecUDP(readsensor.phonesensorqueue, readsensor.mstampsensorD0, this);
-        recudp.start();
+        //recudp.start();  // when coded as thread
+        recudp.onStartCommand(null, 0, 0);  // bypass whole "service" system
+        //final Intent notificationIntent = new Intent(this, LLog3.class);
+        //final PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, notificationIntent, 0);
+        //final Notification notification = new Notification.Builder(this, "who").setContentTitle("hanglog3")
+        //        .setContentText("whatever")
+        //        .setSmallIcon(R.drawable.ic_launcher_background)
+        //        .setContentIntent(pendingIntent)
+        //        .setTicker("thinggg")
+        //        .build();
+        //recudp.startForeground(1112, notification);
 
         Switch gologgingswitch = (Switch)findViewById(R.id.gologgingswitch);
         gologgingswitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
