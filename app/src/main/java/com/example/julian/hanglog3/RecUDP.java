@@ -531,6 +531,7 @@ class RecUDP extends Service {
     Thread thr = null;
     @Override
     public int onStartCommand(final Intent intent, int flags, final int startId) {
+        Log.i("hhanglog5","UDP onstartcommand");
         thr = new Thread("MyService(" + startId + ")") {
             @Override
             public void run() {
@@ -546,27 +547,33 @@ class RecUDP extends Service {
 
     @Override
     public IBinder onBind(Intent intent) {
+        Log.i("hhanglog5","UDP onbind");
         return mBinder;
     }
 
-/*    @Override
+    @Override
     public void onCreate() {
+        Log.i("hhanglog5","UDP oncreate");
+
         // The service is being created
     }
     @Override
     public boolean onUnbind(Intent intent) {
+        Log.i("hhanglog5","UDP onunbind");
         // All clients have unbound with unbindService()
         return false;
     }
     @Override
     public void onRebind(Intent intent) {
+        Log.i("hhanglog5","UDP onrebind");
         // A client is binding to the service with bindService(),
         // after onUnbind() has already been called
     }
     @Override
     public void onDestroy() {
+        Log.i("hhanglog5","UDP ondestroy");
         // The service is no longer used and is being destroyed
     }
-*/
+
 }
 

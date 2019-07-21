@@ -30,6 +30,7 @@ public class GraphPlot {
         mPaint.setStrokeWidth(5);
         mPaint2.setColor(ContextCompat.getColor(context, R.color.colorAccent2));
         mPaint2.setStrokeWidth(5);
+        mPaint2.setTextSize(40);
         mPaintText.setColor(ContextCompat.getColor(context, R.color.colorPrimary));
         mPaintText.setTextSize(70);
         Log.i("hhanglogE", "COLO"+vwidth+" "+vheight+"  "+mColorBackground);
@@ -52,6 +53,8 @@ public class GraphPlot {
         tiltycanvas.drawText(String.format("Ph: %.1f,%.1f", cpos.xposA, cpos.yposA), 0, 210, mPaintText);
         draworient(cpos.northorient, cpos.pitch, cpos.roll, mPaint2);
         draworient(cpos.northorientA, cpos.pitchA, cpos.rollA, mPaint);
+        if (cpos.orientcalibration != -1)
+            tiltycanvas.drawText(String.format("calib: %d%d%d%d", ((cpos.orientcalibration>>6) & 3), ((cpos.orientcalibration>>4) & 3), ((cpos.orientcalibration>>2) & 3), ((cpos.orientcalibration>>0) & 3)), tiltycanvas.getWidth()-200, tiltycanvas.getHeight()-20, mPaint2);
     }
 }
 

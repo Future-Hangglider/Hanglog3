@@ -10,6 +10,7 @@ public class CurrentPos {
     public int vheight = 0;
 
     public double northorient = 0.0, pitch = 0.0, roll = 0.0;
+    public int orientcalibration = 99;
     public double northorientA = 0.0, pitchA = 0.0, rollA = 0.0;
 
     public double lat0 = -9999.0, lng0 = 0.0;
@@ -54,6 +55,7 @@ public class CurrentPos {
             northorient = 180 - Math.toDegrees(rads);
             pitch = Math.toDegrees(Math.asin(sinpitch));
             roll = Math.toDegrees(Math.asin(sinroll));
+            orientcalibration = (hexchar(data[61])<<4) + (hexchar(data[62]));
             //Log.i("hhanglogM", "pitch "+pitch+" roll "+roll);
             //Log.i("hhanglogM", (new String(data, 0, leng)) + "  " + q3);
             return;

@@ -88,17 +88,23 @@ public class LLog3 extends AppCompatActivity {
 
         // older original UDP technology
         recudp = new RecUDP(readsensor.phonesensorqueue, readsensor.mstampsensorD0, this);
-        //recudp.start();  // when coded as thread
-        recudp.onStartCommand(null, 0, 0);  // bypass whole "service" system
-        //final Intent notificationIntent = new Intent(this, LLog3.class);
+
+        //final Intent notificationIntent = new Intent(this, RecUDP.class);
         //final PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, notificationIntent, 0);
-        //final Notification notification = new Notification.Builder(this, "who").setContentTitle("hanglog3")
-        //        .setContentText("whatever")
-        //        .setSmallIcon(R.drawable.ic_launcher_background)
-        //        .setContentIntent(pendingIntent)
-        //        .setTicker("thinggg")
-        //        .build();
+        Notification.Builder notificationbuilder = new Notification.Builder(this)
+                .setContentTitle("hanglog3")
+                .setContentText("whatever")
+                .setSmallIcon(R.drawable.ic_launcher_background)
+                //.setContentIntent(pendingIntent)
+                .setTicker("thinggg");
+        final Notification notification = notificationbuilder.build();
+        notification.flags |= Notification.FLAG_NO_CLEAR;
+
+        Log.i("hhanglog5","UDP startForeground");
+        // Starting as a service (crashes)
         //recudp.startForeground(1112, notification);
+        // or a direct call (works)
+        recudp.onStartCommand(null, 0, 0);  // bypass whole "service" system
 
         Switch gologgingswitch = (Switch)findViewById(R.id.gologgingswitch);
         gologgingswitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
