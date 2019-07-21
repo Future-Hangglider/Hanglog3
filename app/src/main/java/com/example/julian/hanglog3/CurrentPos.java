@@ -10,7 +10,7 @@ public class CurrentPos {
     public int vheight = 0;
 
     public double northorient = 0.0, pitch = 0.0, roll = 0.0;
-    public int orientcalibration = 99;
+    public int orientcalibration = -1;
     public double northorientA = 0.0, pitchA = 0.0, rollA = 0.0;
 
     public double lat0 = -9999.0, lng0 = 0.0;

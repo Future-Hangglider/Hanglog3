@@ -134,6 +134,14 @@ public class LLog3 extends AppCompatActivity {
             }
         });
 
+        Switch goneckrangeswitch = (Switch)findViewById(R.id.goneckrangeswitch);
+        goneckrangeswitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton c, boolean isChecked) {
+                graphplot.SetNeckRangeMode(isChecked);
+            }
+        });
+
         epicwords.setText("yeep\n");
     }
 
