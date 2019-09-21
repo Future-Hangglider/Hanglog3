@@ -1,5 +1,7 @@
 package com.example.julian.hanglog3;
 
+// OpenCV installation done using instructions at https://medium.com/@sukritipaul005/a-beginners-guide-to-installing-opencv-android-in-android-studio-ea46a7b4f2d3
+
 import android.app.Notification;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
@@ -119,6 +121,15 @@ public class LLog3 extends AppCompatActivity {
                 }
             }
         });
+
+        Switch gologpics = (Switch)findViewById(R.id.gologpics);
+        gologpics.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton c, boolean isChecked) {
+                recudp.gologpics(isChecked, getApplicationContext());
+            }
+        });
+
 
         Switch goddsocketswitch = (Switch)findViewById(R.id.goddsocketswitch);
         goddsocketswitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {

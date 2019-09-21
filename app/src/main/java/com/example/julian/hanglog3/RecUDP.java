@@ -4,10 +4,13 @@ package com.example.julian.hanglog3;
 // https://developer.android.com/studio/write/app-link-indexing#java
 
 import android.app.Service;
+import android.content.Context;
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Binder;
 import android.os.Environment;
 import android.os.IBinder;
+import android.provider.MediaStore;
 import android.util.Log;
 
 import java.io.File;
@@ -26,8 +29,9 @@ import java.util.Calendar;
 import java.util.Queue;
 import java.util.TimeZone;
 
-
-
+import android.hardware.Camera;
+import android.hardware.Camera.PictureCallback;
+import android.hardware.Camera.CameraInfo;
 
 class SocketServerReplyThread extends Thread {
     Socket hostThreadSocket;
@@ -212,6 +216,32 @@ class SocketServerThread extends Thread {
 }
 
 
+class PhotoHandler implements PictureCallback {
+    private final Context context;
+
+    public PhotoHandler(Context context) {
+        this.context = context;
+    }
+
+    @Override
+    public void onPictureTaken(byte[] data, Camera camera) {
+
+        File fdir = new File(Environment.getExternalStorageDirectory(), "hanglog");
+        TimeZone timeZoneUTC = TimeZone.getTimeZone("UTC");
+        Calendar rightNow = Calendar.getInstance(timeZoneUTC);
+        SimpleDateFormat ddsdf = new SimpleDateFormat("yyyyMMddHHmmss");
+        ddsdf.setTimeZone(timeZoneUTC);
+        File filejpg = new File(fdir, ddsdf.format(rightNow.getTime()) + ".jpg");
+        try {
+            FileOutputStream fos = new FileOutputStream(filejpg);
+            fos.write(data);
+            fos.close();
+            Log.i("hhanglogP", "Pic saved " + filejpg.toString());
+        } catch (IOException e) {
+            Log.i("hhanglogP", String.valueOf(e));
+        }
+    }
+}
 
 class RecUDP extends Service {
     int[] ubxbytesP = {0, 0, 0, 0};
@@ -247,6 +277,25 @@ class RecUDP extends Service {
         phonesensorqueue = lphonesensorqueue;
         llog3 = lllog3;
         mstampsensorD0 = lmstampsensorD0;
+    }
+
+    public void gologpics(boolean isChecked, Context context) {
+        Camera camera = null;
+        for (int i = 0; i < Camera.getNumberOfCameras(); i++) {
+            CameraInfo info = new CameraInfo();
+            Camera.getCameraInfo(i, info);
+            if (info.facing == CameraInfo.CAMERA_FACING_FRONT) {
+                Log.d("hhanglogP", "Camera found");
+                try {
+                    camera = Camera.open(i);
+                }  catch (RuntimeException e) {
+                    Log.d("hhanglogP", "Camera permissions bad "+e.toString());
+                }
+                break;
+            }
+        }
+        if (camera != null)
+            camera.takePicture(null, null, new PhotoHandler(context));
     }
 
     // these two functions open and close the logging file

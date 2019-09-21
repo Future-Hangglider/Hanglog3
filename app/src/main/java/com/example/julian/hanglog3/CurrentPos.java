@@ -56,6 +56,7 @@ public class CurrentPos {
             pitch = Math.toDegrees(Math.asin(sinpitch));
             roll = Math.toDegrees(Math.asin(sinroll));
             orientcalibration = (hexchar(data[61])<<4) + (hexchar(data[62]));
+            Log.i("hhanglogM", "calib "+data[61]+"s"+orientcalibration);
             //Log.i("hhanglogM", "pitch "+pitch+" roll "+roll);
             //Log.i("hhanglogM", (new String(data, 0, leng)) + "  " + q3);
             return;
