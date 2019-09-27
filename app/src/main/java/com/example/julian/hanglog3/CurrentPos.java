@@ -1,5 +1,6 @@
 package com.example.julian.hanglog3;
 
+import android.graphics.Bitmap;
 import android.util.Log;
 
 import java.util.regex.Matcher;
@@ -18,6 +19,7 @@ public class CurrentPos {
     public double xpos = 0.0, ypos = 0.0, alt = -999.0;
     public double xposA = 0.0, yposA = 0.0, altA = -999.0;
 
+    public Bitmap cameraview = null;
 
     Pattern pZ = Pattern.compile("^Zt[0-9A-F]{8}x[0-9A-F]{4}y[0-9A-F]{4}z[0-9A-F]{4}a[0-9A-F]{4}b[0-9A-F]{4}c[0-9A-F]{4}w([0-9A-F]{4})x([0-9A-F]{4})y([0-9A-F]{4})z([0-9A-F]{4})");
     Pattern paZ = Pattern.compile("^aZt[0-9A-F]{8}x([0-9A-F]{4})y([0-9A-F]{4})z([0-9A-F]{4})");

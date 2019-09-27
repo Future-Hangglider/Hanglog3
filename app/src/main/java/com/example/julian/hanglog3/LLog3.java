@@ -8,6 +8,7 @@ import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.hardware.SensorManager;
+import android.hardware.camera2.CameraAccessException;
 import android.location.LocationManager;
 import android.net.wifi.WifiManager;
 import android.support.v7.app.AppCompatActivity;
@@ -92,7 +93,7 @@ public class LLog3 extends AppCompatActivity {
 
         // older original UDP technology
         recudp = new RecUDP(readsensor.phonesensorqueue, readsensor.mstampsensorD0, this);
-        readcamera = new ReadCamera(this);
+        readcamera = new ReadCamera(this, getApplicationContext());
 
         //final Intent notificationIntent = new Intent(this, RecUDP.class);
         //final PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, notificationIntent, 0);
@@ -129,7 +130,11 @@ public class LLog3 extends AppCompatActivity {
         gologpics.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override
             public void onCheckedChanged(CompoundButton c, boolean isChecked) {
-                readcamera.gologpics(isChecked, getApplicationContext());
+                try {
+                    readcamera.gologpics(isChecked);
+                } catch (CameraAccessException e) {
+                    e.printStackTrace();
+                }
             }
         });
 

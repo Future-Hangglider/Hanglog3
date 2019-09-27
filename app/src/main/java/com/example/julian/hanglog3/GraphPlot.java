@@ -4,6 +4,7 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Paint;
+import android.graphics.Rect;
 import android.support.v4.content.ContextCompat;
 import android.util.Log;
 import android.widget.ImageView;
@@ -70,6 +71,11 @@ public class GraphPlot {
 
     public void drawstuffhanglog() {
         tiltycanvas.drawColor(mColorBackground);
+
+        Bitmap cameraview = cpos.cameraview;
+        if (cameraview != null)
+            tiltycanvas.drawBitmap(cameraview, null, new Rect(0, 0, vwidth, vheight), null);
+
         tiltycanvas.drawText(String.format("gps: %.3f,%.3f", cpos.lat0, cpos.lng0), 0, 50, mPaintText);
         tiltycanvas.drawText(String.format("D: %.1f,%.1f", cpos.xpos, cpos.ypos), 0, 130, mPaintText);
         tiltycanvas.drawText(String.format("Ph: %.1f,%.1f", cpos.xposA, cpos.yposA), 0, 210, mPaintText);
@@ -125,6 +131,7 @@ public class GraphPlot {
             }
             drawstuffneckrange(neckshake, necknod);
         }
+
     }
 }
 

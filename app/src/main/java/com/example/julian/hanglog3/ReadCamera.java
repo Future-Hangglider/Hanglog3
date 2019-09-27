@@ -3,6 +3,8 @@ package com.example.julian.hanglog3;
 import android.Manifest;
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.ImageFormat;
 import android.graphics.SurfaceTexture;
 import android.hardware.camera2.CameraAccessException;
@@ -24,6 +26,8 @@ import android.view.Surface;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.text.SimpleDateFormat;
 import java.util.Arrays;
@@ -33,15 +37,91 @@ import java.util.TimeZone;
 
 public class ReadCamera extends Thread {
 
-    protected CameraDevice cameraDevice;
-    protected CameraCaptureSession session;
+    protected CameraDevice cameraDevice = null;
+    protected CameraCaptureSession session = null;
+    CaptureRequest capturerequest;
+    CameraManager cameraManager = null;
     ImageReader imageReader = null;
-    LLog3 llog3;
+    String cameraID = null;
 
-    ReadCamera (LLog3 lllog3) {
+    LLog3 llog3;
+    Context applicationcontext;
+
+    ReadCamera (LLog3 lllog3, Context lapplicationcontext) {
         llog3 = lllog3;
+        applicationcontext = lapplicationcontext;
     }
 
+
+
+    protected ImageReader.OnImageAvailableListener onImageAvailableListener = new ImageReader.OnImageAvailableListener() {
+        @Override
+        public void onImageAvailable(ImageReader reader) {
+            //Log.i(TAG, "onImageAvailable");
+            Image img = reader.acquireLatestImage();
+            if (img != null) {
+                Image.Plane[] planes = img.getPlanes();
+                ByteBuffer buffer = planes[0].getBuffer();
+                Log.d("hhanglogC7", "buffer thing "+buffer.capacity());
+
+                byte[] data = new byte[buffer.capacity()];
+                buffer.get(data);
+
+                File fdir = new File(Environment.getExternalStorageDirectory(), "hanglog");
+                TimeZone timeZoneUTC = TimeZone.getTimeZone("UTC");
+                Calendar rightNow = Calendar.getInstance(timeZoneUTC);
+                SimpleDateFormat ddsdf = new SimpleDateFormat("yyyyMMddHHmmss");
+                ddsdf.setTimeZone(timeZoneUTC);
+                File filejpg = new File(fdir, ddsdf.format(rightNow.getTime()) + ".jpg");
+                try {
+                    FileOutputStream fos = new FileOutputStream(filejpg);
+                    fos.write(data);
+                    fos.close();
+                    Log.i("hhanglogP", "Pic saved " + filejpg.toString());
+                    llog3.cpos.cameraview = BitmapFactory.decodeFile(filejpg.getAbsolutePath());
+                } catch (IOException e) {
+                    Log.i("hhanglogP", String.valueOf(e));
+                }
+
+                img.close();
+            }
+        }
+    };
+
+
+/*    @Override
+    public void run() {
+        try {
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+    }
+*/
+
+    protected CameraCaptureSession.StateCallback sessionStateCallback = new CameraCaptureSession.StateCallback() {
+        @Override
+        public void onConfigured(@NonNull CameraCaptureSession lsession) {
+            Log.i("hhanglogC6", "CameraCaptureSession.StateCallback onConfigured");
+            session = lsession;
+            try {
+                CaptureRequest.Builder builder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_RECORD);
+                builder.addTarget(imageReader.getSurface());
+                capturerequest = builder.build();
+                session.setRepeatingRequest(capturerequest, null, null);
+            } catch (CameraAccessException e) {
+                Log.e("hhanglogC6", e.getMessage());
+            }
+        }
+
+        @Override
+        public void onConfigureFailed(@NonNull CameraCaptureSession session) {
+            Log.i("hhanglogC6", "CameraCaptureSession.StateCallback congfigfailed");
+            Log.i("hhanglogC6", session.toString());
+        }
+    };
 
     protected CameraDevice.StateCallback cameraStateCallback = new CameraDevice.StateCallback() {
         @Override
@@ -72,76 +152,13 @@ public class ReadCamera extends Thread {
         }
     };
 
-    protected CameraCaptureSession.StateCallback sessionStateCallback = new CameraCaptureSession.StateCallback() {
-        @Override
-        public void onConfigured(@NonNull CameraCaptureSession lsession) {
-            Log.i("hhanglogC6", "CameraCaptureSession.StateCallback onConfigured");
-            session = lsession;
-            try {
-                lsession.setRepeatingRequest(createCaptureRequest(), null, null);
-            } catch (CameraAccessException e) {
-                Log.e("hhanglogC6", e.getMessage());
-            }
-        }
 
-        @Override
-        public void onConfigureFailed(@NonNull CameraCaptureSession session) {
-            Log.i("hhanglogC6", "CameraCaptureSession.StateCallback congfigfailed");
-            Log.i("hhanglogC6", session.toString());
-        }
-    };
-
-    protected CaptureRequest createCaptureRequest() {
-        try {
-            CaptureRequest.Builder builder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_RECORD);
-            builder.addTarget(imageReader.getSurface());
-            return builder.build();
-        } catch (CameraAccessException e) {
-            Log.e("hhanglogC6", e.getMessage());
-            return null;
-        }
-    }
-
-    protected ImageReader.OnImageAvailableListener onImageAvailableListener = new ImageReader.OnImageAvailableListener() {
-        @Override
-        public void onImageAvailable(ImageReader reader) {
-            //Log.i(TAG, "onImageAvailable");
-            Image img = reader.acquireLatestImage();
-            if (img != null) {
-                Image.Plane[] planes = img.getPlanes();
-                ByteBuffer buffer = planes[0].getBuffer();
-                Log.d("hhanglogC7", "buffer thing "+buffer.capacity());
-
-                byte[] data = new byte[buffer.capacity()];
-                buffer.get(data);
-
-                File fdir = new File(Environment.getExternalStorageDirectory(), "hanglog");
-                TimeZone timeZoneUTC = TimeZone.getTimeZone("UTC");
-                Calendar rightNow = Calendar.getInstance(timeZoneUTC);
-                SimpleDateFormat ddsdf = new SimpleDateFormat("yyyyMMddHHmmss");
-                ddsdf.setTimeZone(timeZoneUTC);
-                File filejpg = new File(fdir, ddsdf.format(rightNow.getTime()) + ".jpg");
-                try {
-                    FileOutputStream fos = new FileOutputStream(filejpg);
-                    fos.write(data);
-                    fos.close();
-                    Log.i("hhanglogP", "Pic saved " + filejpg.toString());
-                } catch (IOException e) {
-                    Log.i("hhanglogP", String.valueOf(e));
-                }
-
-
-
-                img.close();
-            }
-        }
-    };
-
-    public void gologpics(boolean isChecked, Context context) {
+    public void getcameraaccess()
+    {
         Log.d("hhanglogC", "Camera isopennn");
-        CameraManager cameraManager = (CameraManager)llog3.getSystemService(Context.CAMERA_SERVICE);
+        cameraManager = (CameraManager)llog3.getSystemService(Context.CAMERA_SERVICE);
         Log.d("hhanglogC", "Camera isopen");
-        String cameraID = null;
+
         CameraCharacteristics characteristics = null;
         try {
             String[] cameraIDlist = cameraManager.getCameraIdList();
@@ -149,14 +166,14 @@ public class ReadCamera extends Thread {
                 String lcameraID = cameraIDlist[i];
                 CameraCharacteristics lcharacteristics = cameraManager.getCameraCharacteristics(lcameraID );
                 int cOrientation = lcharacteristics.get(CameraCharacteristics.LENS_FACING);
-                if (cOrientation == CameraCharacteristics.LENS_FACING_BACK) {
+                if (cOrientation == CameraCharacteristics.LENS_FACING_FRONT) {
                     Log.d("hhanglogC2", i + " front " + lcameraID);
                     cameraID = lcameraID;
                     characteristics = lcharacteristics;
                     break;
                 }
             }
-        } catch (CameraAccessException e){
+        } catch (CameraAccessException e) {
             e.printStackTrace();
         }
 
@@ -172,55 +189,35 @@ public class ReadCamera extends Thread {
         Log.d("hhanglogC3", imageDimension.toString());
 
         // Add permission for camera and let user grant the permission
-        if (ActivityCompat.checkSelfPermission(llog3, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+        if (ActivityCompat.checkSelfPermission(llog3, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(applicationcontext, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(llog3, new String[]{Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE}, 200);
             return;
         }
 
-        //imageReader = ImageReader.newInstance(320, 240, 0x00000001 /*ImageFormat.YUV_420_888*/, 2 /* images buffered */);
         imageReader = ImageReader.newInstance(320, 240, ImageFormat.JPEG, 2);
         imageReader.setOnImageAvailableListener(onImageAvailableListener, null);
-        Log.d("hhanglogC33", imageReader.getSurface().toString());
-        try {
-            cameraManager.openCamera(cameraID, cameraStateCallback, null);
-        } catch (CameraAccessException e){
-            e.printStackTrace();
-        }
-
-        Log.d("hhanglogC3", "imagereadercreated");
-
-
-
-/*
-            StreamConfigurationMap map = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
-            assert map != null;
-            Size imageDimension = map.getOutputSizes(SurfaceTexture.class)[0];
-            // Add permission for camera and let user grant the permission
-            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-                ActivityCompat.requestPermissions(AndroidCameraApi.this, new String[]{Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE}, 200);
-                return;
-            }
-            manager.openCamera(cameraId, stateCallback, null);
-*/
-
-/*        Camera camera = null;
-        for (int i = 0; i < Camera.getNumberOfCameras(); i++) {
-            CameraInfo info = new CameraInfo();
-            Camera.getCameraInfo(i, info);
-            if (info.facing == CameraInfo.CAMERA_FACING_FRONT) {
-                Log.d("hhanglogP", "Camera found");
-                try {
-                    camera = Camera.open(i);
-                }  catch (RuntimeException e) {
-                    Log.d("hhanglogP", "Camera permissions bad "+e.toString());
-                }
-                break;
-            }
-        }
-        if (camera != null)
-            camera.takePicture(null, null, new PhotoHandler(context));
-*/
     }
 
+
+    public void gologpics(boolean isChecked) throws CameraAccessException {
+        if (imageReader == null)
+            getcameraaccess();
+
+        if (isChecked) {
+            Log.d("hhanglogC33", imageReader.getSurface().toString());
+            if (cameraDevice == null) {
+                cameraManager.openCamera(cameraID, cameraStateCallback, null);
+            } else if (session == null) {
+                cameraDevice.createCaptureSession(Arrays.asList(imageReader.getSurface()), sessionStateCallback, null);
+            } else {
+                session.setRepeatingRequest(capturerequest, null, null);
+            }
+        } else {
+            if (session != null) {
+                session.stopRepeating();
+            }
+        }
+        Log.d("hhanglogC3", "imagereadercreated");
+    }
 
 }
