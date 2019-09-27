@@ -94,6 +94,7 @@ public class LLog3 extends AppCompatActivity {
         // older original UDP technology
         recudp = new RecUDP(readsensor.phonesensorqueue, readsensor.mstampsensorD0, this);
         readcamera = new ReadCamera(this, getApplicationContext());
+        readcamera.start();
 
         //final Intent notificationIntent = new Intent(this, RecUDP.class);
         //final PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, notificationIntent, 0);

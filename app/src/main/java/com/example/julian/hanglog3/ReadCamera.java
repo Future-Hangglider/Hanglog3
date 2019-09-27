@@ -34,6 +34,8 @@ import java.util.Arrays;
 import java.util.Calendar;
 import java.util.List;
 import java.util.TimeZone;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 
 public class ReadCamera extends Thread {
 
@@ -46,12 +48,12 @@ public class ReadCamera extends Thread {
 
     LLog3 llog3;
     Context applicationcontext;
+    BlockingQueue<byte[]> imgs = new ArrayBlockingQueue<byte[]>(10, true);
 
     ReadCamera (LLog3 lllog3, Context lapplicationcontext) {
         llog3 = lllog3;
         applicationcontext = lapplicationcontext;
     }
-
 
 
     protected ImageReader.OnImageAvailableListener onImageAvailableListener = new ImageReader.OnImageAvailableListener() {
@@ -63,9 +65,21 @@ public class ReadCamera extends Thread {
                 Image.Plane[] planes = img.getPlanes();
                 ByteBuffer buffer = planes[0].getBuffer();
                 Log.d("hhanglogC7", "buffer thing "+buffer.capacity());
-
                 byte[] data = new byte[buffer.capacity()];
                 buffer.get(data);
+                img.close();
+                if (imgs.remainingCapacity() >= 2)
+                    imgs.add(data);
+            }
+        }
+    };
+
+
+    @Override
+    public void run() {
+        try {
+            while (true) {
+                byte[] data = imgs.take();
 
                 File fdir = new File(Environment.getExternalStorageDirectory(), "hanglog");
                 TimeZone timeZoneUTC = TimeZone.getTimeZone("UTC");
@@ -73,33 +87,20 @@ public class ReadCamera extends Thread {
                 SimpleDateFormat ddsdf = new SimpleDateFormat("yyyyMMddHHmmss");
                 ddsdf.setTimeZone(timeZoneUTC);
                 File filejpg = new File(fdir, ddsdf.format(rightNow.getTime()) + ".jpg");
-                try {
-                    FileOutputStream fos = new FileOutputStream(filejpg);
-                    fos.write(data);
-                    fos.close();
-                    Log.i("hhanglogP", "Pic saved " + filejpg.toString());
-                    llog3.cpos.cameraview = BitmapFactory.decodeFile(filejpg.getAbsolutePath());
-                } catch (IOException e) {
-                    Log.i("hhanglogP", String.valueOf(e));
-                }
 
-                img.close();
+                FileOutputStream fos = new FileOutputStream(filejpg);
+                fos.write(data);
+                fos.close();
+                Log.i("hhanglogP", "Pic saved " + filejpg.toString());
+                llog3.cpos.cameraview = BitmapFactory.decodeFile(filejpg.getAbsolutePath());
             }
-        }
-    };
-
-
-/*    @Override
-    public void run() {
-        try {
-
         } catch (IOException e) {
             e.printStackTrace();
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
     }
-*/
+
 
     protected CameraCaptureSession.StateCallback sessionStateCallback = new CameraCaptureSession.StateCallback() {
         @Override
