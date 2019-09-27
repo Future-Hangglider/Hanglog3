@@ -78,15 +78,22 @@ public class ReadCamera extends Thread {
     @Override
     public void run() {
         try {
+            TimeZone timeZoneUTC = TimeZone.getTimeZone("UTC");
+            SimpleDateFormat ddsdf = new SimpleDateFormat("yyyyMMddHHmmss");
+            ddsdf.setTimeZone(timeZoneUTC);
+            SimpleDateFormat ddsss = new SimpleDateFormat("HHmmss.SSS");
+            ddsss.setTimeZone(timeZoneUTC);
+
+            Calendar startNow = Calendar.getInstance(timeZoneUTC);
+            File fdir = new File(Environment.getExternalStorageDirectory(), "hanglog");
+            File ddir = new File(fdir, "pics"+ddsdf.format(startNow.getTime()));
+            ddir.mkdirs();
+
             while (true) {
                 byte[] data = imgs.take();
 
-                File fdir = new File(Environment.getExternalStorageDirectory(), "hanglog");
-                TimeZone timeZoneUTC = TimeZone.getTimeZone("UTC");
                 Calendar rightNow = Calendar.getInstance(timeZoneUTC);
-                SimpleDateFormat ddsdf = new SimpleDateFormat("yyyyMMddHHmmss");
-                ddsdf.setTimeZone(timeZoneUTC);
-                File filejpg = new File(fdir, ddsdf.format(rightNow.getTime()) + ".jpg");
+                File filejpg = new File(ddir, ddsss.format(rightNow.getTime()) + ".jpg");
 
                 FileOutputStream fos = new FileOutputStream(filejpg);
                 fos.write(data);
