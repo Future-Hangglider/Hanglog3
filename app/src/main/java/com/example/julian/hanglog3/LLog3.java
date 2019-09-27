@@ -52,6 +52,8 @@ public class LLog3 extends AppCompatActivity {
     CurrentPos cpos = new CurrentPos();
     GraphPlot graphplot = null;
 
+    ReadCamera readcamera;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -90,6 +92,7 @@ public class LLog3 extends AppCompatActivity {
 
         // older original UDP technology
         recudp = new RecUDP(readsensor.phonesensorqueue, readsensor.mstampsensorD0, this);
+        readcamera = new ReadCamera(this);
 
         //final Intent notificationIntent = new Intent(this, RecUDP.class);
         //final PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, notificationIntent, 0);
@@ -126,7 +129,7 @@ public class LLog3 extends AppCompatActivity {
         gologpics.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override
             public void onCheckedChanged(CompoundButton c, boolean isChecked) {
-                recudp.gologpics(isChecked, getApplicationContext());
+                readcamera.gologpics(isChecked, getApplicationContext());
             }
         });
 
