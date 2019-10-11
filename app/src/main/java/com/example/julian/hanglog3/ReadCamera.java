@@ -52,8 +52,7 @@ import org.opencv.core.Scalar;
 import org.opencv.core.Size;
 import org.opencv.core.TermCriteria;
 import org.opencv.imgcodecs.Imgcodecs;
-import org.opencv.imgproc.Imgproc;
-
+//import org.opencv.aruco.Dictionary;
 
 public class ReadCamera extends Thread {
 
@@ -89,6 +88,9 @@ public class ReadCamera extends Thread {
 
     double[] mCameraMatrixdata = {264.9033392766471, 0.0, 160.20863466317323, 0.0, 263.9151565707493, 120.18598837732736, 0.0, 0.0, 1.0};
     double[] mDistortionCoefficientsdata = {0.06522344324121337, -0.28901021975336144, 0.003548857636261892, -0.005779355866042926, 0.45972249493447437};
+
+    //aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_4X4_50)
+    //parameters =  cv2.aruco.DetectorParameters_create()
 
     // constructor
     ReadCamera (LLog3 lllog3, Context lapplicationcontext)
@@ -182,6 +184,40 @@ public class ReadCamera extends Thread {
         // retval, cameraMatrix, distCoeffs, rvecs, tvecs = cv2.calibrateCamera([chesscorners]*len(imagePoints), imagePoints, (320,240), None, None)
 
     }
+
+    void detectcharucoboard(Mat encoded)
+    {
+        Mat BGRMat = Imgcodecs.imdecode(encoded, Imgcodecs.CV_LOAD_IMAGE_UNCHANGED); // Imgcodecs.imread(filejpg.getAbsolutePath());
+        if ((BGRMat.width() == 0) || (BGRMat.height() == 0))
+            return;
+        else if (mImageSize == null)
+            mImageSize = new org.opencv.core.Size(BGRMat.width(), BGRMat.height());
+        try {
+            //markerCorners, markerIds, rejectedMarkers = cv2.aruco.detectMarkers(frame, aruco_dict, parameters = parameters, cameraMatrix = cameraMatrix, distCoeff = distCoeffs)
+        } catch (org.opencv.core.CvException e) {
+            e.printStackTrace();
+        }
+
+ //       markerCorners, markerIds, rejectedMarkers = cv2.aruco.detectMarkers(frame, aruco_dict, parameters = parameters, cameraMatrix = cameraMatrix, distCoeff = distCoeffs)
+ //       if markerIds is None:
+ //       continue
+ //               markerCorners,
+ //       markerIds, rejectedMarkers, recoveredIdxs = cv2.aruco.refineDetectedMarkers(frame, charboard, markerCorners, markerIds, rejectedMarkers, cameraMatrix, distCoeffs)
+ //       retval, charucoCorners, charucoIds = cv2.aruco.interpolateCornersCharuco(markerCorners, markerIds, frame, charboard, cameraMatrix = cameraMatrix, distCoeffs = distCoeffs)
+ //       if not retval:continue
+ //               retval,
+ //       rvec, tvec = cv2.aruco.estimatePoseCharucoBoard(charucoCorners, charucoIds, charboard, cameraMatrix, distCoeffs)
+ //       if not retval:continue
+ //               tvec,rvec = tvec.T[0], rvec.T[0] #3 - vectors
+
+
+ //       rotmat = cv2.Rodrigues(rvec)[0].T
+ //       tvec = tvec + rotmat[0] * (squaresX * chesssquareLength / 2) + rotmat[1] * (squaresY * chesssquareLength / 2)  #
+ //       displace to centre of board
+ //               zvec = rotmat[2]
+    }
+
+
 
     Mat detectchessboard(Mat encoded, MatOfPoint2f corners)
     {
