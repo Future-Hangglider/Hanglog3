@@ -24,6 +24,8 @@ import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import org.opencv.android.OpenCVLoader;
+
 import java.io.FileOutputStream;
 
 public class LLog3 extends AppCompatActivity {
@@ -79,7 +81,8 @@ public class LLog3 extends AppCompatActivity {
 
         readsensor = new ReadSensor((SensorManager)getSystemService(Context.SENSOR_SERVICE),
                                     (LocationManager)getSystemService(Context.LOCATION_SERVICE));
-        Toast.makeText(getBaseContext(), "readsensormade", Toast.LENGTH_LONG).show();
+        //Toast.makeText(getBaseContext(), "readsensormade", Toast.LENGTH_LONG).show();
+        Toast.makeText(getBaseContext(), "OpenCVLoader "+String.valueOf(OpenCVLoader.initDebug()), Toast.LENGTH_LONG).show();
 
         WifiManager wifimanager = (WifiManager)getApplicationContext().getSystemService(Context.WIFI_SERVICE);
         bhotspotmode = (wifimanager.getWifiState() == WifiManager.WIFI_STATE_DISABLED); // no wifi then assume hotspot mode
