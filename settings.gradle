@@ -1,3 +1,3 @@
-include ':app'
-include ':openCVLibrary343'
-include ':java'
+include ':app', 'OpenCV412'
+include ':openCVLibrary412'
+include ':openCVLibrary412b'

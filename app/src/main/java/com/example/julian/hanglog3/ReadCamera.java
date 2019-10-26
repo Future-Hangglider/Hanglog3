@@ -187,7 +187,7 @@ public class ReadCamera extends Thread {
 
     void detectcharucoboard(Mat encoded)
     {
-        Mat BGRMat = Imgcodecs.imdecode(encoded, Imgcodecs.CV_LOAD_IMAGE_UNCHANGED); // Imgcodecs.imread(filejpg.getAbsolutePath());
+        Mat BGRMat = Imgcodecs.imdecode(encoded, Imgcodecs.IMREAD_UNCHANGED); // Imgcodecs.imread(filejpg.getAbsolutePath());
         if ((BGRMat.width() == 0) || (BGRMat.height() == 0))
             return;
         else if (mImageSize == null)
@@ -221,7 +221,7 @@ public class ReadCamera extends Thread {
 
     Mat detectchessboard(Mat encoded, MatOfPoint2f corners)
     {
-        Mat BGRMat = Imgcodecs.imdecode(encoded, Imgcodecs.CV_LOAD_IMAGE_UNCHANGED); // Imgcodecs.imread(filejpg.getAbsolutePath());
+        Mat BGRMat = Imgcodecs.imdecode(encoded, Imgcodecs.IMREAD_UNCHANGED); // Imgcodecs.imread(filejpg.getAbsolutePath());
         if ((BGRMat.width() == 0) || (BGRMat.height() == 0))
             return null;
         else if (mImageSize == null)

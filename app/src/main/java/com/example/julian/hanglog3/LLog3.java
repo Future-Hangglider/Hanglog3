@@ -26,6 +26,7 @@ import android.widget.Toast;
 
 import org.opencv.android.OpenCVLoader;
 
+
 import java.io.FileOutputStream;
 
 public class LLog3 extends AppCompatActivity {
