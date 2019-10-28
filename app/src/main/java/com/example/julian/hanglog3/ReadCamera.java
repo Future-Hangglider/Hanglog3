@@ -52,7 +52,9 @@ import org.opencv.core.Scalar;
 import org.opencv.core.Size;
 import org.opencv.core.TermCriteria;
 import org.opencv.imgcodecs.Imgcodecs;
-//import org.opencv.aruco.Dictionary;
+
+import org.opencv.aruco.Dictionary;
+
 
 public class ReadCamera extends Thread {
 
@@ -89,8 +91,13 @@ public class ReadCamera extends Thread {
     double[] mCameraMatrixdata = {264.9033392766471, 0.0, 160.20863466317323, 0.0, 263.9151565707493, 120.18598837732736, 0.0, 0.0, 1.0};
     double[] mDistortionCoefficientsdata = {0.06522344324121337, -0.28901021975336144, 0.003548857636261892, -0.005779355866042926, 0.45972249493447437};
 
-    //aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_4X4_50)
-    //parameters =  cv2.aruco.DetectorParameters_create()
+    org.opencv.aruco.Dictionary aruco_dict = null;
+    org.opencv.aruco.DetectorParameters parameters = null;
+
+    int squaresX = 5, squaresY = 7;
+    float markersquareratio = 0.5F;
+    float chesssquareLength = 0.025F;
+    org.opencv.aruco.CharucoBoard charboard;
 
     // constructor
     ReadCamera (LLog3 lllog3, Context lapplicationcontext)
@@ -99,7 +106,6 @@ public class ReadCamera extends Thread {
         applicationcontext = lapplicationcontext;
         ddsdf.setTimeZone(timeZoneUTC);
         ddsss.setTimeZone(timeZoneUTC);
-
         chessboardcorners = Mat.zeros(mCornersSize, 1, CvType.CV_32FC3);
         chessboardcorners.create(mCornersSize, 1, CvType.CV_32FC3);
         int cn = 3;
@@ -120,6 +126,10 @@ public class ReadCamera extends Thread {
 
         mCameraMatrix.put(0, 0, mCameraMatrixdata);
         mDistortionCoefficients.put(0, 0, mDistortionCoefficientsdata);
+
+        aruco_dict = org.opencv.aruco.Dictionary.get(org.opencv.aruco.Aruco.DICT_4X4_50);
+        parameters = org.opencv.aruco.DetectorParameters.create();
+        charboard = org.opencv.aruco.CharucoBoard.create(squaresX, squaresY, chesssquareLength, chesssquareLength*markersquareratio, aruco_dict);
 
         Log.i("hhanglogMcameraInit", mattostring(mCameraMatrix));
         Log.i("hhanglogMdistorInit", mattostring(mDistortionCoefficients));
@@ -185,15 +195,35 @@ public class ReadCamera extends Thread {
 
     }
 
-    void detectcharucoboard(Mat encoded)
+    Mat detectcharucoboard(Mat encoded)
     {
         Mat BGRMat = Imgcodecs.imdecode(encoded, Imgcodecs.IMREAD_UNCHANGED); // Imgcodecs.imread(filejpg.getAbsolutePath());
         if ((BGRMat.width() == 0) || (BGRMat.height() == 0))
-            return;
+            return null;
         else if (mImageSize == null)
             mImageSize = new org.opencv.core.Size(BGRMat.width(), BGRMat.height());
         try {
-            //markerCorners, markerIds, rejectedMarkers = cv2.aruco.detectMarkers(frame, aruco_dict, parameters = parameters, cameraMatrix = cameraMatrix, distCoeff = distCoeffs)
+//            org.opencv.aruco.Dictionary aruco_dict = org.opencv.aruco.Dictionary.get(org.opencv.aruco.Aruco.DICT_4X4_50);
+//            org.opencv.aruco.DetectorParameters parameters = org.opencv.aruco.DetectorParameters.create();
+
+            List<Mat> markerCorners = new ArrayList<>();
+            Mat markerIds = new Mat();
+            List<Mat> rejectedImgPoints = new ArrayList<>();
+            org.opencv.aruco.Aruco.detectMarkers(BGRMat, aruco_dict, markerCorners, markerIds, parameters, rejectedImgPoints, mCameraMatrix, mDistortionCoefficients);
+            if (markerCorners.size()>0)
+            {
+                //org.opencv.aruco.Aruco.drawDetectedMarkers(BGRMat, markerCorners);
+                //org.opencv.aruco.Aruco.refineDetectedMarkers(BGRMat, aruco_dict, markerCorners, markerIds, rejectedImgPoints, rejectedImgPoints, mCameraMatrix, mDistortionCoefficients);
+                Mat charucoCorners = new Mat();
+                Mat charucoIds = new Mat();
+                int res2 = org.opencv.aruco.Aruco.interpolateCornersCharuco(markerCorners, markerIds, BGRMat, charboard, charucoCorners, charucoIds, mCameraMatrix, mDistortionCoefficients);
+                //Aruco.estimatePoseSingleMarkers(corners, 0.85, cameraMatrix);
+                Mat rvec = new Mat();
+                Mat tvec = new Mat();
+                org.opencv.aruco.Aruco.estimatePoseCharucoBoard(charucoCorners, charucoIds, charboard, mCameraMatrix, mDistortionCoefficients, rvec, tvec);
+                org.opencv.aruco.Aruco.drawAxis(BGRMat, mCameraMatrix, mDistortionCoefficients, rvec, tvec, 0.2F);
+            }
+
         } catch (org.opencv.core.CvException e) {
             e.printStackTrace();
         }
@@ -215,6 +245,7 @@ public class ReadCamera extends Thread {
  //       tvec = tvec + rotmat[0] * (squaresX * chesssquareLength / 2) + rotmat[1] * (squaresY * chesssquareLength / 2)  #
  //       displace to centre of board
  //               zvec = rotmat[2]
+        return BGRMat;
     }
 
 
@@ -248,7 +279,9 @@ public class ReadCamera extends Thread {
             return null;
         Calendar rightNow = Calendar.getInstance(timeZoneUTC);
         MatOfPoint2f corners = new MatOfPoint2f();
-        Mat BGRMat = detectchessboard(encoded, corners);
+        //Mat BGRMat = detectchessboard(encoded, corners);
+        Mat BGRMat = detectcharucoboard(encoded);
+
         if (BGRMat == null)
             return null;
 

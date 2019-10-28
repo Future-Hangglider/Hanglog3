@@ -11,6 +11,7 @@ import android.hardware.SensorManager;
 import android.hardware.camera2.CameraAccessException;
 import android.location.LocationManager;
 import android.net.wifi.WifiManager;
+import android.os.Build;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
@@ -84,6 +85,9 @@ public class LLog3 extends AppCompatActivity {
                                     (LocationManager)getSystemService(Context.LOCATION_SERVICE));
         //Toast.makeText(getBaseContext(), "readsensormade", Toast.LENGTH_LONG).show();
         Toast.makeText(getBaseContext(), "OpenCVLoader "+String.valueOf(OpenCVLoader.initDebug()), Toast.LENGTH_LONG).show();
+
+        for (int i = 0; i < Build.SUPPORTED_ABIS.length; i++)
+            Log.i("hhanglogIqqqP", String.format(Build.SUPPORTED_ABIS[i]));
 
         WifiManager wifimanager = (WifiManager)getApplicationContext().getSystemService(Context.WIFI_SERVICE);
         bhotspotmode = (wifimanager.getWifiState() == WifiManager.WIFI_STATE_DISABLED); // no wifi then assume hotspot mode

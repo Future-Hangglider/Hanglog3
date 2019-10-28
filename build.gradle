@@ -8,6 +8,8 @@ buildscript {
     }
     dependencies {
         classpath 'com.android.tools.build:gradle:3.5.1'
+        classpath 'com.jfrog.bintray.gradle:gradle-bintray-plugin:1.7.3'
+        classpath 'com.github.dcendents:android-maven-gradle-plugin:2.0'
         
 
         // NOTE: Do not place your application dependencies here; they belong
@@ -25,3 +27,17 @@ allprojects {
 task clean(type: Delete) {
     delete rootProject.buildDir
 }
+
+
+if (!project.hasProperty("bintray_user")) {
+    ext.bintray_user = "stub"
+}
+
+if (!project.hasProperty("bintray_apikey")) {
+    ext.bintray_apikey = "stub"
+}
+
+if (!project.hasProperty("bintray_gpg_password")) {
+    ext.bintray_gpg_password = "stub"
+}
+
