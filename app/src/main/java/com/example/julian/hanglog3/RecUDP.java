@@ -31,6 +31,25 @@ import java.util.Queue;
 import java.util.TimeZone;
 
 
+/* Python code for pulling in data off the phone
+import socket
+def loglines():
+        phoneipnumber = "10.0.38.88"
+        hanglogport = 9042
+        addr1 = socket.getaddrinfo(phoneipnumber, hanglogport)[0][-1]
+        s1 = socket.socket()
+        s1.connect(addr1)
+        s1.send(b"-@@@")
+        rf = [ ]
+        while True:
+        r = s1.recv(10)
+        while b"\n" in r:
+        rr, r = r.split(b"\n", 1)
+        rf.append(rr)
+        yield b"".join(rf).decode()
+        rf.clear()
+        rf.append(r)
+*/
 
 class SocketServerReplyThread extends Thread {
     Socket hostThreadSocket;
@@ -92,6 +111,7 @@ class SocketServerReplyThread extends Thread {
                         }
                         sleep(10);
                     }
+
                 }
 
             // connection in from PC wanting data to be forwarded to it (may be multiple connections)
@@ -335,7 +355,7 @@ class RecUDP extends Service {
         //ddhost = "144.76.167.54";
         Log.i("hhanglog78", ddhost);
 
-        ubxIddsocketup = 3;
+        ubxIddsocketup = 0;
         for (int i = 1; i <= 3; i++) {
             if (ubxbytesP[i] != 0)
                 ubxIddsocketup = i;
@@ -362,6 +382,66 @@ class RecUDP extends Service {
         return "closed";
     }
 
+    public void forwardtoDDSocket(byte[] data, int leng)
+    {
+        if ((ddsocketup == null) && (ddhost != null)) {
+            try {
+                Log.i("hhanglog78", ddhost);
+                ddsocketup = new Socket(ddhost, ddport);
+                Log.i("hhanglog7999", ddhost);
+                ddsocketupstream = ddsocketup.getOutputStream();
+            } catch (UnknownHostException e) {
+                Log.i("hhanglog7d", e.getMessage());
+                ddhost = null;
+            } catch (SocketException e) {
+                Log.i("hhanglog8d", e.getMessage());
+                ddhost = null;
+            } catch (IOException e) {
+                Log.i("hhanglog8d", e.getMessage());
+                ddhost = null;
+            } catch (SecurityException e) {
+                Log.i("hhanglog8d", e.getMessage());
+                ddhost = null;
+            }
+        }
+        if ((ddsocketup != null) && (ddhost == null)) {
+            try {
+                ddsocketup.close();
+            } catch (SocketException e) {
+                Log.i("hhanglog5d", e.getMessage());
+            } catch (IOException e) {
+                Log.i("hhanglog6d", e.getMessage());
+            }
+            ddsocketup = null;
+            ddsocketupstream = null;
+            ubxIddsocketup = -1;
+        }
+        if (ddsocketupstream != null) {
+            try {
+                ddsocketupstream.write(data, 0, leng);
+            } catch (IOException e) {
+                Log.i("hhanglogFFp", String.valueOf(e));
+            }
+        }
+    }
+
+    public void forwardtoPCsockets(int ubxI, byte[] data, int leng) throws IOException
+    {
+        for (int i = 0; i < Npcforwardsockets; i++) {
+            Socket lpcforwardsocket = pcforwardsockets[i];
+            OutputStream lpcforwardoutputStream = pcforwardoutputStreams[i];
+            if ((pcforwardsocketsI[i] == ubxI) && (lpcforwardsocket != null) && (lpcforwardoutputStream != null)) {
+                try {
+                    lpcforwardoutputStream.write(data, 0, leng);
+                } catch (IOException e) {
+                    pcforwardsockets[i] = null;
+                    pcforwardoutputStreams[i] = null;
+                    Log.i("hhanglogX pcforward close", String.format("ubxI %d %d", ubxI, i));
+                    lpcforwardsocket.close();
+                }
+            }
+        }
+    }
 
     // this is where we separate out multiple UBX streams from different ipnumbers
     public void writefostreamUBX(int ubxI, byte[] data, int leng) throws IOException {
@@ -378,45 +458,8 @@ class RecUDP extends Service {
         }
 
         // create socket if required (can't be done on main thread)
-        if (ubxI == ubxIddsocketup) {
-            if ((ddsocketup == null) && (ddhost != null)) {
-                try {
-                    Log.i("hhanglog78", ddhost);
-                    ddsocketup = new Socket(ddhost, ddport);
-                    Log.i("hhanglog7999", ddhost);
-                    ddsocketupstream = ddsocketup.getOutputStream();
-                } catch (UnknownHostException e) {
-                    Log.i("hhanglog7d", e.getMessage());
-                    ddhost = null;
-                } catch (SocketException e) {
-                    Log.i("hhanglog8d", e.getMessage());
-                    ddhost = null;
-                } catch (IOException e) {
-                    Log.i("hhanglog8d", e.getMessage());
-                    ddhost = null;
-                } catch (SecurityException e) {
-                    Log.i("hhanglog8d", e.getMessage());
-                    ddhost = null;
-                }
-            }
-            if ((ddsocketup != null) && (ddhost == null)) {
-                try {
-                    ddsocketup.close();
-                } catch (SocketException e) {
-                    Log.i("hhanglog5d", e.getMessage());
-                } catch (IOException e) {
-                    Log.i("hhanglog6d", e.getMessage());
-                }
-                ddsocketup = null;
-                ddsocketupstream = null;
-                ubxIddsocketup = -1;
-            }
-            try {
-                ddsocketupstream.write(data, 0, leng);
-            } catch (IOException e) {
-                Log.i("hhanglogFFp", String.valueOf(e));
-            }
-        }
+        if (ubxI == ubxIddsocketup)
+            forwardtoDDSocket(data, leng);
 
         ubxbytesP[ubxI] += leng;
         for (int i = 0; i < leng; i++) {
@@ -426,28 +469,17 @@ class RecUDP extends Service {
             }
         }
 
-        for (int i = 0; i < Npcforwardsockets; i++) {
-            Socket lpcforwardsocket = pcforwardsockets[i];
-            OutputStream lpcforwardoutputStream = pcforwardoutputStreams[i];
-            if ((pcforwardsocketsI[i] == ubxI) && (lpcforwardsocket != null) && (lpcforwardoutputStream != null)) {
-                try {
-                    lpcforwardoutputStream.write(data, 0, leng);
-                } catch (IOException e) {
-                    pcforwardsockets[i] = null;
-                    pcforwardoutputStreams[i] = null;
-                    Log.i("hhanglogX pcforward close", String.format("ubxI %d %d", ubxI, i));
-                    lpcforwardsocket.close();
-                }
-            }
-        }
-
-
+        forwardtoPCsockets(ubxI, data, leng);
     }
 
     public void writefostream(byte[] data, int leng) throws IOException {
         FileOutputStream lfostream = fostreamUBX[0]; // protect null pointers from thread conditions
         if (lfostream != null)
             lfostream.write(data, 0, leng);
+
+        if (0 == ubxIddsocketup)
+            forwardtoDDSocket(data, leng);
+        forwardtoPCsockets(0, data, leng);
 
         long mstamp = System.currentTimeMillis();
         llog3.cpos.processPos(data, leng);
