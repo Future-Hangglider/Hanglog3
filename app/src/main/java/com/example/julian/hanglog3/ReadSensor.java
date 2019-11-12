@@ -80,6 +80,20 @@ class ReadSensor implements SensorEventListener, LocationListener {
             phonesensorqueue.add(phonesensorrep);
     }
 
+    public void cameraCharucoPosition(long tval, double rvec0, double rvec1, double rvec2, double tvec0, double tvec1, double tvec2) {
+        long tstamp = tval - mstampsensor0;
+        //long tstamp = System.currentTimeMillis() - mstampsensor0;
+        long lrvec0 = Double.doubleToRawLongBits(rvec0);
+        long lrvec1 = Double.doubleToRawLongBits(rvec1);
+        long lrvec2 = Double.doubleToRawLongBits(rvec2);
+        long ltvec0 = Double.doubleToRawLongBits(tvec0);
+        long ltvec1 = Double.doubleToRawLongBits(tvec1);
+        long ltvec2 = Double.doubleToRawLongBits(tvec2);
+        String chs = String.format("aCt%08Xa%16Xb%16Xc%16Xd%16Xe%16Xf%16X\n", tstamp, lrvec0, lrvec1, lrvec2, ltvec0, ltvec1, ltvec2);
+        if (phonesensorqueue.size() < phonesensorqueuesizelimit)
+            phonesensorqueue.add(chs);
+    }
+
     // GPS sensor functions
     @Override
     public void onProviderDisabled(String provider) {

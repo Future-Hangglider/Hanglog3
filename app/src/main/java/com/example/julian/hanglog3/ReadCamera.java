@@ -68,7 +68,7 @@ public class ReadCamera extends Thread {
     CameraManager cameraManager = null;
     ImageReader imageReader = null;
     String cameraID = null;
-    int saveimagemode = 2;  // 1 overlayed chessboard, 2 original image
+    int saveimagemode = 0;  // 0 charuco, 1 overlayed chessboard, 2 original image (when chessboard)
 
     LLog3 llog3;
     Context applicationcontext;
@@ -195,7 +195,7 @@ public class ReadCamera extends Thread {
 
     }
 
-    Mat detectcharucoboard(Mat encoded)
+    Mat detectcharucoboard(Mat encoded, Mat rvec, Mat tvec)
     {
         Mat BGRMat = Imgcodecs.imdecode(encoded, Imgcodecs.IMREAD_UNCHANGED); // Imgcodecs.imread(filejpg.getAbsolutePath());
         if ((BGRMat.width() == 0) || (BGRMat.height() == 0))
@@ -203,9 +203,6 @@ public class ReadCamera extends Thread {
         else if (mImageSize == null)
             mImageSize = new org.opencv.core.Size(BGRMat.width(), BGRMat.height());
         try {
-//            org.opencv.aruco.Dictionary aruco_dict = org.opencv.aruco.Dictionary.get(org.opencv.aruco.Aruco.DICT_4X4_50);
-//            org.opencv.aruco.DetectorParameters parameters = org.opencv.aruco.DetectorParameters.create();
-
             List<Mat> markerCorners = new ArrayList<>();
             Mat markerIds = new Mat();
             List<Mat> rejectedImgPoints = new ArrayList<>();
@@ -218,11 +215,10 @@ public class ReadCamera extends Thread {
                 Mat charucoIds = new Mat();
                 int res2 = org.opencv.aruco.Aruco.interpolateCornersCharuco(markerCorners, markerIds, BGRMat, charboard, charucoCorners, charucoIds, mCameraMatrix, mDistortionCoefficients);
                 //Aruco.estimatePoseSingleMarkers(corners, 0.85, cameraMatrix);
-                Mat rvec = new Mat();
-                Mat tvec = new Mat();
                 org.opencv.aruco.Aruco.estimatePoseCharucoBoard(charucoCorners, charucoIds, charboard, mCameraMatrix, mDistortionCoefficients, rvec, tvec);
-                org.opencv.aruco.Aruco.drawAxis(BGRMat, mCameraMatrix, mDistortionCoefficients, rvec, tvec, 0.2F);
             }
+            else
+                rvec.release();
 
         } catch (org.opencv.core.CvException e) {
             e.printStackTrace();
@@ -237,14 +233,6 @@ public class ReadCamera extends Thread {
  //       if not retval:continue
  //               retval,
  //       rvec, tvec = cv2.aruco.estimatePoseCharucoBoard(charucoCorners, charucoIds, charboard, cameraMatrix, distCoeffs)
- //       if not retval:continue
- //               tvec,rvec = tvec.T[0], rvec.T[0] #3 - vectors
-
-
- //       rotmat = cv2.Rodrigues(rvec)[0].T
- //       tvec = tvec + rotmat[0] * (squaresX * chesssquareLength / 2) + rotmat[1] * (squaresY * chesssquareLength / 2)  #
- //       displace to centre of board
- //               zvec = rotmat[2]
         return BGRMat;
     }
 
@@ -278,21 +266,16 @@ public class ReadCamera extends Thread {
         if ((encoded.width() == 0) || (encoded.height() == 0))
             return null;
         Calendar rightNow = Calendar.getInstance(timeZoneUTC);
-        MatOfPoint2f corners = new MatOfPoint2f();
-        //Mat BGRMat = detectchessboard(encoded, corners);
-        Mat BGRMat = detectcharucoboard(encoded);
+        MatOfPoint2f chessboardcorners = new MatOfPoint2f();
+        Mat BGRMat = detectchessboard(encoded, chessboardcorners);
 
-        if (BGRMat == null)
+        if (chessboardcorners.empty())
             return null;
-
-        Bitmap bmp = Bitmap.createBitmap(BGRMat.cols(), BGRMat.rows(), Bitmap.Config.ARGB_8888);
-        Utils.matToBitmap(BGRMat, bmp);
-        llog3.cpos.cameraview = bmp;
-        if (corners.empty())
-            return null;
-
         try {
             if (saveimagemode == 1) {
+                Bitmap bmp = Bitmap.createBitmap(BGRMat.cols(), BGRMat.rows(), Bitmap.Config.ARGB_8888);
+                Utils.matToBitmap(BGRMat, bmp);
+
                 File filejpg = new File(ddir, ddsss.format(rightNow.getTime()) + ".jpg");
                 Log.i("hhanglogP", "Pic saved " + filejpg.toString());
                 OutputStream os = new BufferedOutputStream(new FileOutputStream(filejpg));
@@ -310,8 +293,41 @@ public class ReadCamera extends Thread {
             e.printStackTrace();
         }
 
-        return corners;
+        return chessboardcorners;
     }
+
+    String processcharucoboard(Mat encoded, Mat rvec, Mat tvec)
+    {
+        if ((encoded.width() == 0) || (encoded.height() == 0))
+            return null;
+        Mat BGRMat = detectcharucoboard(encoded, rvec, tvec);
+        if (BGRMat == null)
+            return "";
+        if (llog3.cpos.cameraview == null) {
+            if (!rvec.empty()) {
+                //Log.i("hhanglogMrvec", mattostring(rvec)+" tvec: "+mattostring(tvec));
+                Mat rotmat = new Mat();
+                org.opencv.calib3d.Calib3d.Rodrigues(rvec, rotmat);
+                Log.i("hhanglogMrvec", mattostring(rotmat));
+                double[] drotmat = new double[9];
+                double[] dtvec = new double[3];
+                rotmat.get(0, 0, drotmat);
+                tvec.get(0, 0, dtvec);
+                dtvec[0] = dtvec[0] + drotmat[0]*(squaresX*chesssquareLength/2) + drotmat[1]*(squaresY*chesssquareLength/2);
+                dtvec[1] = dtvec[1] + drotmat[3]*(squaresX*chesssquareLength/2) + drotmat[4]*(squaresY*chesssquareLength/2);
+                dtvec[2] = dtvec[2] + drotmat[6]*(squaresX*chesssquareLength/2) + drotmat[7]*(squaresY*chesssquareLength/2);
+                Mat ctvec = tvec.clone();
+                ctvec.put(0, 0, dtvec);
+                org.opencv.aruco.Aruco.drawAxis(BGRMat, mCameraMatrix, mDistortionCoefficients, rvec, ctvec, 0.1F);
+            }
+            Bitmap bmp = Bitmap.createBitmap(BGRMat.cols(), BGRMat.rows(), Bitmap.Config.ARGB_8888);
+            Utils.matToBitmap(BGRMat, bmp);
+            llog3.cpos.cameraview = bmp;
+        }
+        return "";
+    }
+
+
 
     @Override
     public void run() {
@@ -325,6 +341,11 @@ public class ReadCamera extends Thread {
                 ddir.mkdirs();
             ArrayList<Mat> mCornersBuffer = new ArrayList<Mat>();
 
+            Mat rvec = new Mat();
+            Mat tvec = new Mat();
+            double[] drvec = new double[3];
+            double[] dtvec = new double[3];
+
             // main loop
             while (true) {
 
@@ -332,13 +353,23 @@ public class ReadCamera extends Thread {
                 while (!bacquiringimages)
                     sleep(100);
 
-                // the process and record chessboards
+                // the process and record chessboards/charucoboards
                 mCornersBuffer.clear();
                 while (bacquiringimages) {
+                    long tval = System.currentTimeMillis();
                     Mat encoded = rawcameraimgqueue.take();
-                    MatOfPoint2f corners = processimageforchessboard(encoded, ddir);
-                    if (corners != null)
-                        mCornersBuffer.add(corners);
+                    if (saveimagemode == 0) {
+                        processcharucoboard(encoded, rvec, tvec);
+                        if (!rvec.empty()) {
+                            tvec.get(0, 0, dtvec);
+                            rvec.get(0, 0, drvec);
+                            llog3.readsensor.cameraCharucoPosition(tval, drvec[0], drvec[1], drvec[2], dtvec[0], dtvec[1], dtvec[2]);
+                        }
+                    } else {
+                        MatOfPoint2f corners = processimageforchessboard(encoded, ddir);
+                        if (corners != null)
+                            mCornersBuffer.add(corners);
+                    }
                 }
 
                 // then calebrate the chessboards

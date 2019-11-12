@@ -69,10 +69,12 @@ public class GraphPlot {
         tiltycanvas.drawLine(vline, 0, vline, vheight, paint);
     }
 
-    public void drawstuffhanglog() {
+    public void drawstuffhanglog()
+    {
         tiltycanvas.drawColor(mColorBackground);
 
         Bitmap cameraview = cpos.cameraview;
+        cpos.cameraview = null; // consume so we know to add in another one
         if (cameraview != null)
             tiltycanvas.drawBitmap(cameraview, null, new Rect(0, 0, vwidth, vheight), null);
 
