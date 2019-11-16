@@ -80,7 +80,7 @@ class ReadSensor implements SensorEventListener, LocationListener {
             phonesensorqueue.add(phonesensorrep);
     }
 
-    public void cameraCharucoPosition(long tval, double rvec0, double rvec1, double rvec2, double tvec0, double tvec1, double tvec2) {
+    public void outputCharucoPosition(long tval, double rvec0, double rvec1, double rvec2, double tvec0, double tvec1, double tvec2) {
         long tstamp = tval - mstampsensor0;
         //long tstamp = System.currentTimeMillis() - mstampsensor0;
         long lrvec0 = Double.doubleToRawLongBits(rvec0);
