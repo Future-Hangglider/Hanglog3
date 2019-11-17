@@ -75,8 +75,10 @@ public class GraphPlot {
 
         Bitmap cameraview = cpos.cameraview;
         cpos.cameraview = null; // consume so we know to add in another one
-        if (cameraview != null)
+        if (cameraview != null) {
             tiltycanvas.drawBitmap(cameraview, null, new Rect(0, 0, vwidth, vheight), null);
+            cameraview.recycle();
+        }
 
         tiltycanvas.drawText(String.format("gps: %.3f,%.3f", cpos.lat0, cpos.lng0), 0, 50, mPaintText);
         tiltycanvas.drawText(String.format("D: %.1f,%.1f", cpos.xpos, cpos.ypos), 0, 130, mPaintText);

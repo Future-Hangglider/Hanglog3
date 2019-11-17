@@ -58,27 +58,56 @@ import org.opencv.imgcodecs.Imgcodecs;
 import org.opencv.aruco.Dictionary;
 import org.opencv.imgproc.Imgproc;
 
+class ReceivedImage {
+    int framenumber;
+    Calendar frametime;
+    Mat rgbMat;
+    ReceivedImage(int lframenumber, Calendar lframetime, Mat lrgbMat) {
+        framenumber = lframenumber;
+        frametime = lframetime;
+        rgbMat = lrgbMat;
+    }
+
+    Bitmap converttobmp()
+    {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        Bitmap bmp = Bitmap.createBitmap(rgbMat.cols(), rgbMat.rows(), Bitmap.Config.ARGB_8888);
+        Utils.matToBitmap(rgbMat, bmp);
+        return bmp;
+    }
+
+    File framefilename(File ddir) {
+        return new File(ddir, ReadCamera.ddsss.format(frametime.getTime()) + "_" + String.valueOf(framenumber) + ".jpg");
+    }
+
+
+
+};
 
 public class ReadCamera extends Thread {
 
+    int saveeveryframeinterval = 10;
+    boolean bcharucootherwisechess = true;
+    int imagerequestedWidth = 640, imagerequestedHeight = 480;
+
     TimeZone timeZoneUTC = TimeZone.getTimeZone("UTC");
     SimpleDateFormat ddsdf = new SimpleDateFormat("yyyyMMddHHmmss");
-    SimpleDateFormat ddsss = new SimpleDateFormat("HHmmss.SSS");
+    static SimpleDateFormat ddsss = new SimpleDateFormat("HHmmss.SSS");
 
     protected CameraDevice cameraDevice = null;
     protected CameraCaptureSession session = null;
     CaptureRequest capturerequest;
     CameraManager cameraManager = null;
     ImageReader imageReader = null;
+
     String cameraID = null;
-    int saveimagemode = 0;  // 0 charuco, 1 overlayed chessboard, 2 original image (when chessboard), 3 original image always
-    boolean bsaveeveryframe = true;
+
     int framesread = 0;
     android.util.Size imageDimension = null;
 
     LLog3 llog3;
     Context applicationcontext;
-    BlockingQueue<Mat> rawcameraimgqueue = new ArrayBlockingQueue<Mat>(10, true);
+    BlockingQueue<ReceivedImage> rawcameraimgqueue = new ArrayBlockingQueue<ReceivedImage>(3, true);
     boolean bacquiringimages = false;
 
     org.opencv.core.Size board_sz = new org.opencv.core.Size(6, 9);
@@ -199,138 +228,51 @@ public class ReadCamera extends Thread {
         // calibrations come very different to what it calculates with same inputs on the PC
         // chesscbuffi = numpy.array([ ... ], numpy.float32).reshape(54,2)
         // retval, cameraMatrix, distCoeffs, rvecs, tvecs = cv2.calibrateCamera([chesscorners]*len(imagePoints), imagePoints, (320,240), None, None)
-
     }
 
-    Mat detectcharucoboard(Mat BGRMat, Mat rvec, Mat tvec)
+    void detectcharucoboard(Mat rgbMat, Mat rvec, Mat tvec)
     {
-       if ((BGRMat.width() == 0) || (BGRMat.height() == 0))
-            return null;
-        else if (mImageSize == null)
-            mImageSize = new org.opencv.core.Size(BGRMat.width(), BGRMat.height());
         try {
             List<Mat> markerCorners = new ArrayList<>();
             Mat markerIds = new Mat();
             List<Mat> rejectedImgPoints = new ArrayList<>();
-            org.opencv.aruco.Aruco.detectMarkers(BGRMat, aruco_dict, markerCorners, markerIds, parameters, rejectedImgPoints, mCameraMatrix, mDistortionCoefficients);
+            org.opencv.aruco.Aruco.detectMarkers(rgbMat, aruco_dict, markerCorners, markerIds, parameters, rejectedImgPoints, mCameraMatrix, mDistortionCoefficients);
             if (markerCorners.size()>0)
             {
                 //org.opencv.aruco.Aruco.drawDetectedMarkers(BGRMat, markerCorners);
                 //org.opencv.aruco.Aruco.refineDetectedMarkers(BGRMat, aruco_dict, markerCorners, markerIds, rejectedImgPoints, rejectedImgPoints, mCameraMatrix, mDistortionCoefficients);
                 Mat charucoCorners = new Mat();
                 Mat charucoIds = new Mat();
-                int res2 = org.opencv.aruco.Aruco.interpolateCornersCharuco(markerCorners, markerIds, BGRMat, charboard, charucoCorners, charucoIds, mCameraMatrix, mDistortionCoefficients);
+                int res2 = org.opencv.aruco.Aruco.interpolateCornersCharuco(markerCorners, markerIds, rgbMat, charboard, charucoCorners, charucoIds, mCameraMatrix, mDistortionCoefficients);
                 //Aruco.estimatePoseSingleMarkers(corners, 0.85, cameraMatrix);
                 org.opencv.aruco.Aruco.estimatePoseCharucoBoard(charucoCorners, charucoIds, charboard, mCameraMatrix, mDistortionCoefficients, rvec, tvec);
             }
-            else
-                rvec.release();
-
         } catch (org.opencv.core.CvException e) {
             e.printStackTrace();
         }
-
- //       markerCorners, markerIds, rejectedMarkers = cv2.aruco.detectMarkers(frame, aruco_dict, parameters = parameters, cameraMatrix = cameraMatrix, distCoeff = distCoeffs)
- //       if markerIds is None:
- //       continue
- //               markerCorners,
- //       markerIds, rejectedMarkers, recoveredIdxs = cv2.aruco.refineDetectedMarkers(frame, charboard, markerCorners, markerIds, rejectedMarkers, cameraMatrix, distCoeffs)
- //       retval, charucoCorners, charucoIds = cv2.aruco.interpolateCornersCharuco(markerCorners, markerIds, frame, charboard, cameraMatrix = cameraMatrix, distCoeffs = distCoeffs)
- //       if not retval:continue
- //               retval,
- //       rvec, tvec = cv2.aruco.estimatePoseCharucoBoard(charucoCorners, charucoIds, charboard, cameraMatrix, distCoeffs)
-        return BGRMat;
     }
 
 
 
-    Mat detectchessboard(Mat encoded, MatOfPoint2f corners)
+
+    void drawcharucoaxes(Mat rgbMat, Mat rvec, Mat tvec)
     {
-        Mat BGRMat = Imgcodecs.imdecode(encoded, Imgcodecs.IMREAD_UNCHANGED); // Imgcodecs.imread(filejpg.getAbsolutePath());
-        if ((BGRMat.width() == 0) || (BGRMat.height() == 0))
-            return null;
-        else if (mImageSize == null)
-            mImageSize = new org.opencv.core.Size(BGRMat.width(), BGRMat.height());
-        try {
-            boolean found = Calib3d.findChessboardCorners(BGRMat, board_sz, corners, Calib3d.CALIB_CB_ADAPTIVE_THRESH | Calib3d.CALIB_CB_FILTER_QUADS);
-            if (found) {
-                //Imgproc.cornerSubPix(BGRMat, corners, winSize, zeroZone, criteria);
-                Calib3d.drawChessboardCorners(BGRMat, board_sz, corners, found);
-            } else {
-                corners.release();
-            }
-        } catch (org.opencv.core.CvException e) {
-            e.printStackTrace();
-        }
-
-        //Imgcodecs.imwrite(filejpg.getAbsolutePath(), BGRMat);
-        return BGRMat;
+        assert !rvec.empty();
+        //Log.i("hhanglogMrvec", mattostring(rvec)+" tvec: "+mattostring(tvec));
+        Mat rotmat = new Mat();
+        org.opencv.calib3d.Calib3d.Rodrigues(rvec, rotmat);
+        Log.i("hhanglogMrvec", mattostring(rotmat));
+        double[] drotmat = new double[9];
+        double[] dtvec = new double[3];
+        rotmat.get(0, 0, drotmat);
+        tvec.get(0, 0, dtvec);
+        dtvec[0] = dtvec[0] + drotmat[0]*(squaresX*chesssquareLength/2) + drotmat[1]*(squaresY*chesssquareLength/2);
+        dtvec[1] = dtvec[1] + drotmat[3]*(squaresX*chesssquareLength/2) + drotmat[4]*(squaresY*chesssquareLength/2);
+        dtvec[2] = dtvec[2] + drotmat[6]*(squaresX*chesssquareLength/2) + drotmat[7]*(squaresY*chesssquareLength/2);
+        Mat ctvec = tvec.clone();
+        ctvec.put(0, 0, dtvec);
+        org.opencv.aruco.Aruco.drawAxis(rgbMat, mCameraMatrix, mDistortionCoefficients, rvec, ctvec, 0.1F);
     }
-
-
-    MatOfPoint2f processimageforchessboard(Mat encoded, File ddir)
-    {
-        if ((encoded.width() == 0) || (encoded.height() == 0))
-            return null;
-        Calendar rightNow = Calendar.getInstance(timeZoneUTC);
-        MatOfPoint2f chessboardcorners = new MatOfPoint2f();
-        Mat BGRMat = detectchessboard(encoded, chessboardcorners);
-        if (chessboardcorners.empty() && (saveimagemode != 3))
-            return null;
-        try {
-            if (saveimagemode == 1) {
-                Bitmap bmp = Bitmap.createBitmap(BGRMat.cols(), BGRMat.rows(), Bitmap.Config.ARGB_8888);
-                Utils.matToBitmap(BGRMat, bmp);
-
-                File filejpg = new File(ddir, ddsss.format(rightNow.getTime()) + ".jpg");
-                Log.i("hhanglogP", "Pic saved " + filejpg.toString());
-                OutputStream os = new BufferedOutputStream(new FileOutputStream(filejpg));
-                bmp.compress(Bitmap.CompressFormat.JPEG, 90, os);
-                os.close();
-            } else if ((saveimagemode == 2) || (saveimagemode == 3)) {
-                byte[] data = new byte[encoded.cols()];
-                encoded.get(0, 0, data);
-                File filejpg = new File(ddir, ddsss.format(rightNow.getTime()) + ".jpg");
-                FileOutputStream fos = new FileOutputStream(filejpg);
-                fos.write(data);
-                fos.close();
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-        return chessboardcorners;
-    }
-
-    String processcharucoboard(Mat rgbMat, Mat rvec, Mat tvec)
-    {
-        Mat BGRMat = detectcharucoboard(rgbMat, rvec, tvec);
-        if (BGRMat == null)
-            return "";
-        if (llog3.cpos.cameraview == null) {
-            if (!rvec.empty()) {
-                //Log.i("hhanglogMrvec", mattostring(rvec)+" tvec: "+mattostring(tvec));
-                Mat rotmat = new Mat();
-                org.opencv.calib3d.Calib3d.Rodrigues(rvec, rotmat);
-                Log.i("hhanglogMrvec", mattostring(rotmat));
-                double[] drotmat = new double[9];
-                double[] dtvec = new double[3];
-                rotmat.get(0, 0, drotmat);
-                tvec.get(0, 0, dtvec);
-                dtvec[0] = dtvec[0] + drotmat[0]*(squaresX*chesssquareLength/2) + drotmat[1]*(squaresY*chesssquareLength/2);
-                dtvec[1] = dtvec[1] + drotmat[3]*(squaresX*chesssquareLength/2) + drotmat[4]*(squaresY*chesssquareLength/2);
-                dtvec[2] = dtvec[2] + drotmat[6]*(squaresX*chesssquareLength/2) + drotmat[7]*(squaresY*chesssquareLength/2);
-                Mat ctvec = tvec.clone();
-                ctvec.put(0, 0, dtvec);
-                org.opencv.aruco.Aruco.drawAxis(BGRMat, mCameraMatrix, mDistortionCoefficients, rvec, ctvec, 0.1F);
-            }
-            Bitmap bmp = Bitmap.createBitmap(BGRMat.cols(), BGRMat.rows(), Bitmap.Config.ARGB_8888);
-            Utils.matToBitmap(BGRMat, bmp);
-            llog3.cpos.cameraview = bmp;
-        }
-        return "";
-    }
-
 
 
     @Override
@@ -341,7 +283,7 @@ public class ReadCamera extends Thread {
             Calendar startNow = Calendar.getInstance(timeZoneUTC);
             File fdir = new File(Environment.getExternalStorageDirectory(), "hanglog");
             File ddir = new File(fdir, "pics" + ddsdf.format(startNow.getTime()));
-            if ((saveimagemode != 0) || bsaveeveryframe)
+            if (saveeveryframeinterval != 0)
                 ddir.mkdirs();
             ArrayList<Mat> mCornersBuffer = new ArrayList<Mat>();
 
@@ -361,52 +303,58 @@ public class ReadCamera extends Thread {
                 mCornersBuffer.clear();
                 while (bacquiringimages) {
                     long tval = System.currentTimeMillis();
-                    Mat rgbMat = rawcameraimgqueue.take();
-Log.d("hhanglogC8", "buffer taken");
-
-                    if (bsaveeveryframe) {
+                    ReceivedImage receivedimage = rawcameraimgqueue.take();
+Log.d("hhanglogC8", "buffer taken "+receivedimage.framenumber);
+                    if ((saveeveryframeinterval != 0) && ((receivedimage.framenumber % saveeveryframeinterval) == 0)) {
+                        Bitmap bmp = receivedimage.converttobmp();
+                        File filejpg = receivedimage.framefilename(ddir);
                         try {
-                            Calendar rightNow = Calendar.getInstance(timeZoneUTC);
-                            ByteArrayOutputStream out = new ByteArrayOutputStream();
-
-                            Bitmap bmp = Bitmap.createBitmap(rgbMat.cols(), rgbMat.rows(), Bitmap.Config.ARGB_8888);
-                            Utils.matToBitmap(rgbMat, bmp);
-                            File filejpg = new File(ddir, ddsss.format(rightNow.getTime()) + ".jpg");
                             Log.i("hhanglogP", "Pic saved " + filejpg.toString());
                             OutputStream os = new BufferedOutputStream(new FileOutputStream(filejpg));
                             bmp.compress(Bitmap.CompressFormat.JPEG, 30, os);
                             os.close();
-
-
-                            //File filejpg = new File(ddir, ddsss.format(rightNow.getTime()) + ".jpg");
-                            //FileOutputStream fos = new FileOutputStream(filejpg);
-                            //yuv.compressToJpeg(new android.graphics.Rect(0, 0, yuv.getWidth(), yuv.getHeight()), 30, fos);
-                            //fos.close();
                         } catch (IOException e) {
                             e.printStackTrace();
                         }
                     }
+                    if (mImageSize == null)
+                        mImageSize = new org.opencv.core.Size(receivedimage.rgbMat.width(), receivedimage.rgbMat.height());
 
-                    if (saveimagemode == 0) {
-                        processcharucoboard(rgbMat, rvec, tvec);
+                    if (bcharucootherwisechess) {
+                        detectcharucoboard(receivedimage.rgbMat, rvec, tvec);
+                        if (llog3.cpos.cameraview == null) {
+                            if (!rvec.empty())
+                                drawcharucoaxes(receivedimage.rgbMat, rvec, tvec);
+                            llog3.cpos.cameraview = receivedimage.converttobmp();
+                        }
                         if (!rvec.empty()) {
-                            tvec.get(0, 0, dtvec);
                             rvec.get(0, 0, drvec);
+                            tvec.get(0, 0, dtvec);
                             llog3.readsensor.outputCharucoPosition(tval, drvec[0], drvec[1], drvec[2], dtvec[0], dtvec[1], dtvec[2]);
+                            rvec.release();
+                            tvec.release();
                         }
                     } else {
-                        MatOfPoint2f corners = processimageforchessboard(rgbMat, ddir);
-                        if (corners != null)
-                            mCornersBuffer.add(corners);
+                        MatOfPoint2f chessboardcorners = new MatOfPoint2f();
+                        boolean bchessboardfound = Calib3d.findChessboardCorners(receivedimage.rgbMat, board_sz, chessboardcorners, Calib3d.CALIB_CB_ADAPTIVE_THRESH | Calib3d.CALIB_CB_FILTER_QUADS);
+                        //if (bchessboardfound)
+                        //    Imgproc.cornerSubPix(receivedimage.rgbMat, chessboardcorners, winSize, zeroZone, criteria);
+                        if (!chessboardcorners.empty())
+                            mCornersBuffer.add(chessboardcorners);
+                        if (llog3.cpos.cameraview == null) {
+                            if (bchessboardfound)
+                                Calib3d.drawChessboardCorners(receivedimage.rgbMat, board_sz, chessboardcorners, bchessboardfound);
+                            llog3.cpos.cameraview = receivedimage.converttobmp();
+                        }
                     }
-                }
+                } // end while (bacquiringimages)
 
                 // then calebrate the chessboards
                 if (mCornersBuffer.size() >= 1)
                     calibratechessboard(mCornersBuffer);
 
-                // and repeat
-            }
+            } // while (true) (to enable image acquisition again
+
         } catch (InterruptedException e) {
             Log.d("hhanglogC8", "buffer interruption while loop");
             e.printStackTrace();
@@ -417,21 +365,16 @@ Log.d("hhanglogC8", "buffer taken");
         @Override
         public void onImageAvailable(ImageReader reader) {
             //Log.i(TAG, "onImageAvailable");
+            Calendar rightNow = Calendar.getInstance(timeZoneUTC);
             framesread++;
             Image img = reader.acquireLatestImage();
             if (bacquiringimages && (img != null)) {
-                // seeing https://stackoverflow.com/questions/40090681/android-camera2-api-yuv-420-888-to-jpeg
+                // https://github.com/quickbirdstudios/yuvToMat/blob/master/lib/src/main/java/com/quickbirdstudios/yuv2mat/YuvN12Image.kt
                 ByteBuffer yBuffer = img.getPlanes()[0].getBuffer();
                 ByteBuffer uBuffer = img.getPlanes()[1].getBuffer();
                 ByteBuffer vBuffer = img.getPlanes()[2].getBuffer();
                 int ySize = yBuffer.remaining();
                 int uSize = uBuffer.remaining();
-                int vSize = vBuffer.remaining();
-                //byte[] nv21 = new byte[ySize + uSize + vSize];
-                //yBuffer.get(nv21, 0, ySize);
-                //vBuffer.get(nv21, ySize, vSize);
-                //uBuffer.get(nv21, ySize + vSize, uSize);
-                //YuvImage yuv = new YuvImage(nv21, ImageFormat.NV21, img.getWidth(), img.getHeight(), null);
 
                 yBuffer.position(0);
                 uBuffer.position(0);
@@ -443,12 +386,14 @@ Log.d("hhanglogC8", "buffer taken");
                 Mat rgbMat = Mat.zeros(img.getHeight(), img.getWidth(), CvType.CV_8UC3);
                 Imgproc.cvtColor(yuvMat, rgbMat, Imgproc.COLOR_YUV2RGB_NV12);
                 yuvMat.release();
-                Log.d("hhanglogC7s", rgbMat.size().toString());
+                //Log.d("hhanglogC7s", rgbMat.size().toString());
 
-                //if ((framesread%100) == 0)
+                if ((framesread%100) == 0)
                     Log.d("hhanglogC7", "image buffer "+framesread+" size:"+data.length);
                 if (rawcameraimgqueue.remainingCapacity() >= 2)
-                    rawcameraimgqueue.add(rgbMat);
+                    rawcameraimgqueue.add(new ReceivedImage(framesread, rightNow, rgbMat));
+                else
+                    Log.d("hhanglogC7", "dropping frame "+framesread);
             }
             if (img != null)
                 img.close();
@@ -541,7 +486,7 @@ Log.d("hhanglogC8", "buffer taken");
         for (int i = 0; i < imageDimensionlist.length; i++)
             Log.d("hhanglogC3", imageDimensionlist[i].toString());
         imageDimension = imageDimensionlist[0];
-        Log.d("hhanglogC3", imageDimension.toString());
+        Log.d("hhanglogC3 biggest", imageDimension.toString());
 
         // Add permission for camera and let user grant the permission
         if (ActivityCompat.checkSelfPermission(llog3, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(applicationcontext, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
@@ -549,8 +494,9 @@ Log.d("hhanglogC8", "buffer taken");
             return;
         }
 
-        //imageReader = ImageReader.newInstance(320, 240, ImageFormat.JPEG, 2);
-        imageReader = ImageReader.newInstance(imageDimension.getWidth(), imageDimension.getHeight(), ImageFormat.YUV_420_888, 2);
+        imageReader = ImageReader.newInstance(imagerequestedWidth, imagerequestedHeight, ImageFormat.YUV_420_888, 2);
+        if (imageReader == null)
+            imageReader = ImageReader.newInstance(imageDimension.getWidth(), imageDimension.getHeight(), ImageFormat.YUV_420_888, 2);
         imageReader.setOnImageAvailableListener(onImageAvailableListener, null);
     }
 
