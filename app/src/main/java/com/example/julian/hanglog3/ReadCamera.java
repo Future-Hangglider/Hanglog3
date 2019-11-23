@@ -62,10 +62,22 @@ class ReceivedImage {
     int framenumber;
     Calendar frametime;
     Mat rgbMat;
+    Mat grayMat = null;
+
     ReceivedImage(int lframenumber, Calendar lframetime, Mat lrgbMat) {
         framenumber = lframenumber;
         frametime = lframetime;
         rgbMat = lrgbMat;
+    }
+
+    Mat getgrayMat()
+    {
+        if (grayMat == null) {
+            grayMat = Mat.zeros(rgbMat.height(), rgbMat.width(), CvType.CV_8UC1);
+            Imgproc.cvtColor(rgbMat, grayMat, Imgproc.COLOR_BGR2GRAY);
+Log.i("hhanglogCCgray", "gray: " + rgbMat.height()+","+rgbMat.width());
+        }
+        return grayMat;
     }
 
     Bitmap converttobmp()
@@ -86,9 +98,12 @@ class ReceivedImage {
 
 public class ReadCamera extends Thread {
 
-    int saveeveryframeinterval = 10;
+    int saveeveryframeinterval = 0;
     boolean bcharucootherwisechess = true;
+    //int imagerequestedWidth = 320, imagerequestedHeight = 240;
     int imagerequestedWidth = 640, imagerequestedHeight = 480;
+    int skippedframes = 0;
+    int framesread = 0;
 
     TimeZone timeZoneUTC = TimeZone.getTimeZone("UTC");
     SimpleDateFormat ddsdf = new SimpleDateFormat("yyyyMMddHHmmss");
@@ -102,7 +117,6 @@ public class ReadCamera extends Thread {
 
     String cameraID = null;
 
-    int framesread = 0;
     android.util.Size imageDimension = null;
 
     LLog3 llog3;
@@ -124,8 +138,12 @@ public class ReadCamera extends Thread {
     Mat mCameraMatrix;
     Mat mDistortionCoefficients;
 
-    double[] mCameraMatrixdata = {264.9033392766471, 0.0, 160.20863466317323, 0.0, 263.9151565707493, 120.18598837732736, 0.0, 0.0, 1.0};
-    double[] mDistortionCoefficientsdata = {0.06522344324121337, -0.28901021975336144, 0.003548857636261892, -0.005779355866042926, 0.45972249493447437};
+    // imagerequestedWidth = 320, imagerequestedHeight = 240:
+    //double[] mCameraMatrixdata = {264.9033392766471, 0.0, 160.20863466317323, 0.0, 263.9151565707493, 120.18598837732736, 0.0, 0.0, 1.0};
+    //double[] mDistortionCoefficientsdata = {0.06522344324121337, -0.28901021975336144, 0.003548857636261892, -0.005779355866042926, 0.45972249493447437};
+    // imagerequestedWidth = 640, imagerequestedHeight = 480:
+    double[] mCameraMatrixdata = {560.2579866820173, 0.0, 320.02303700498317, 0.0, 590.6518491657391, 240.04051419696953, 0.0, 0.0, 1.0};
+    double[] mDistortionCoefficientsdata = {0.11009461279226761, -0.5207408831756383, -0.003506107151687262, 0.0012457176202829781, 1.0903450462033453};
 
     org.opencv.aruco.Dictionary aruco_dict = null;
     org.opencv.aruco.DetectorParameters parameters = null;
@@ -209,7 +227,7 @@ public class ReadCamera extends Thread {
 
         Log.i("hhanglogMCB", "chesscorners: " + mattostring(chessboardcorners));
 
-        while (mCornersBuffer.size() > 4)
+        while (mCornersBuffer.size() > 40)
             mCornersBuffer.remove(0);
 
         for (int i = 0; i < mCornersBuffer.size(); i++) {
@@ -338,7 +356,7 @@ Log.d("hhanglogC8", "buffer taken "+receivedimage.framenumber);
                         MatOfPoint2f chessboardcorners = new MatOfPoint2f();
                         boolean bchessboardfound = Calib3d.findChessboardCorners(receivedimage.rgbMat, board_sz, chessboardcorners, Calib3d.CALIB_CB_ADAPTIVE_THRESH | Calib3d.CALIB_CB_FILTER_QUADS);
                         //if (bchessboardfound)
-                        //    Imgproc.cornerSubPix(receivedimage.rgbMat, chessboardcorners, winSize, zeroZone, criteria);
+                        //    Imgproc.cornerSubPix(receivedimage.getgrayMat(), chessboardcorners, winSize, zeroZone, criteria);
                         if (!chessboardcorners.empty())
                             mCornersBuffer.add(chessboardcorners);
                         if (llog3.cpos.cameraview == null) {
@@ -392,8 +410,10 @@ Log.d("hhanglogC8", "buffer taken "+receivedimage.framenumber);
                     Log.d("hhanglogC7", "image buffer "+framesread+" size:"+data.length);
                 if (rawcameraimgqueue.remainingCapacity() >= 2)
                     rawcameraimgqueue.add(new ReceivedImage(framesread, rightNow, rgbMat));
-                else
-                    Log.d("hhanglogC7", "dropping frame "+framesread);
+                else {
+                    skippedframes++;
+                    Log.d("hhanglogC7", "dropping frame " + framesread);
+                }
             }
             if (img != null)
                 img.close();

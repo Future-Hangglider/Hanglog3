@@ -57,7 +57,7 @@ public class LLog3 extends AppCompatActivity {
     CurrentPos cpos = new CurrentPos();
     GraphPlot graphplot = null;
 
-    ReadCamera readcamera;
+    ReadCamera readcamera = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -93,7 +93,7 @@ public class LLog3 extends AppCompatActivity {
         bhotspotmode = (wifimanager.getWifiState() == WifiManager.WIFI_STATE_DISABLED); // no wifi then assume hotspot mode
         int ipAddress = wifimanager.getConnectionInfo().getIpAddress();
         Log.i("hhanglogIP", String.format("ipAddress %d", ipAddress));
-        epicipnum.setText(String.format("ipAddress %d %d", ipAddress, wifimanager.getWifiState()));
+        epicipnum.setText(String.format("ipAddress %d.%d.%d.%d %d %d", (ipAddress>>24)&255, (ipAddress>>16)&255, (ipAddress>>8)&255, (ipAddress>>0)&255, wifimanager.getWifiState(), (readcamera != null ? readcamera.skippedframes : -1)));
 
         // soon to replace socket server technology
         socketserverthread = new SocketServerThread(this);

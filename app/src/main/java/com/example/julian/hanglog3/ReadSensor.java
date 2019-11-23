@@ -26,6 +26,7 @@ class ReadSensor implements SensorEventListener, LocationListener {
 
     SensorManager mSensorManager;
     Sensor mSensorRotvector;
+    Sensor mSensorAccelerometer;
     Sensor mSensorPressure;
     LocationManager mLocationManager;
 
@@ -50,6 +51,8 @@ class ReadSensor implements SensorEventListener, LocationListener {
         mSensorManager = lmSensorManager;
         mSensorRotvector =  mSensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR);
         mSensorManager.registerListener(this, mSensorRotvector, SensorManager.SENSOR_DELAY_NORMAL);
+        mSensorAccelerometer =  mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        mSensorManager.registerListener(this, mSensorAccelerometer, SensorManager.SENSOR_DELAY_NORMAL);
         mSensorPressure = mSensorManager.getDefaultSensor(Sensor.TYPE_PRESSURE);
         mSensorManager.registerListener(this, mSensorPressure, SensorManager.SENSOR_DELAY_NORMAL);
 
@@ -74,6 +77,8 @@ class ReadSensor implements SensorEventListener, LocationListener {
         String phonesensorrep = null;
         if (evt.sensor.getType() == Sensor.TYPE_ROTATION_VECTOR)
             phonesensorrep = String.format("aZt%08Xx%04Xy%04Xz%04X\n", tstamp, ((int)(evt.values[0]*32768))&0xFFFF, ((int)(evt.values[1]*32768))&0xFFFF, ((int)(evt.values[2]*32768))&0xFFFF);
+        else if (evt.sensor.getType() == Sensor.TYPE_ACCELEROMETER)
+            phonesensorrep = String.format("aAt%08Xx%04Xy%04Xz%04X\n", tstamp, ((int)(evt.values[0]*32768))&0xFFFF, ((int)(evt.values[1]*32768))&0xFFFF, ((int)(evt.values[2]*32768))&0xFFFF);
         else if (evt.sensor.getType() == Sensor.TYPE_PRESSURE)
             phonesensorrep = String.format("aFt%08Xp%06X\n", tstamp, ((int)(evt.values[0]*100))&0xFFFFFF);
         if ((phonesensorrep != null) && (phonesensorqueue.size() < phonesensorqueuesizelimit))
