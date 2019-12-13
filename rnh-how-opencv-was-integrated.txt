@@ -1,0 +1,133 @@
+These instructions are derived from two sources:
+
+	https://zami0xzami.wordpress.com/2016/03/17/building-opencv-for-android-from-source/
+
+	along with the more recent:
+
+	https://amin-ahmadi.com/2019/02/03/how-to-build-opencv-4-x-for-native-android-development/
+
+
+Source:
+
+	cd c:\projects
+	Download opencv 4.1.2 from github.com/opencv/opencv/archive/4.1.2.zip (3.4 and 4.0.1 fails to build)
+	or https://github.com/opencv/opencv/releases/tag/4.1.2
+	Extract and rename as opencv in c:\projects
+	
+	Make these changes:
+		Change line 301 of C:\Projects\opencv\modules\core\src\utils\logtagconfigparser.cpp
+		to return "";//return std::to_string((int)level);
+
+		Change org.gradle.jvmargs=-Xmx2g in C:\Projects\opencv\platforms\android\gradle-wrapper\gradle.properties to org.gradle.jvmargs=-Xmx1200m
+		
+	Download opencv-contrib 4.1.2 from https://github.com/opencv/opencv_contrib/releases
+	Extract zip and rename as opencv_contrib in c:\projects
+	
+		Slide xfeatures2d out of opencv_contrib/modules directory so doesn't build (because it won't)
+
+	git clone https://github.com/Future-Hangglider/Hanglog3.git
+
+Tools:
+
+	Download cmake 3.5.15 from https://cmake.org/download/ and extract to c:
+	Download and install mingw from https://sourceforge.net/projects/mingw-w64/, run it and select minimal, basic, c++
+	Download NPN version 16b **no later** from https://developer.android.com/ndk/downloads/older_releases
+
+Process:
+	
+	OPENCV
+	======
+	Go to ‘<opencv-source>/platforms’ and create a folder named ‘android_arm’
+	
+	Run ‘<cmake-dir>/bin/cmake-gui’ set paths as follows:
+	
+		Press ‘Add Entry’ button in the cmake-gui, add ‘ANDROID_NDK’ as a cmake ‘path’ variable and provide the value as <ndk-dir>
+		
+		Add ‘ANDROID_NDK_HOST_X64’ too and check that.
+		
+		Add ANDROID_SDK_ROOT and point to this path on your disk
+		
+		Set ‘CMAKE_TOOLCHAIN_FILE’ as ‘<opencv-source>/platforms/android/android.toolchain.cmake’.
+
+	Press Configure
+
+		Select ‘OPENCV_EXTRA_MODULES_PATH’ under ‘OPENCV’ category and insert ‘<opencv-contrib-source>/modules’
+		
+	Edit android.toolchain.cmake and change API defaults from 9 and 21 to 27 under # API level defaults
+	
+	
+	Press ‘Configure’. Choose ‘MinGW Makefile’ as the compiler and press ‘Finish’. See  whether above configurations are properly set as in the below figures. Keep other settings as it is.
+	
+	That should now complete fine, so hit Generate (not needed actually)
+	
+	Go to <mingw-dir>/msys/1.0 and run ‘msys’ bash file.
+	
+	export ANDROID_HOME=/c/AndroidStudioSDK
+	export ANDROID_NDK_HOME=/c/Projects/android-ndk-r16b
+	export JAVA_HOME="/c/Program Files/Java/jdk1.8.0_211"
+	
+	Change C:\Projects\opencv\platforms\android_arm\OpenCVConfig.cmake line 107 to set(OpenCV_FOUND 1) from _FOUND 0), for some reason ANDROID_NATIVE_API_LEVEL is being reset to 21 despite CMAKE flag being for 27, and so failing.  This cheats that.
+
+	Edit C:\Projects\opencv\samples\android\CMakeLists.txt and comment out with # all add_subdirectory() lines; the examples are missing
+	an include path, we don't need them, this is easiest to resolve.
+
+	cd /c/<opencv-source>/platforms/android_arm’ and run ‘mingw32-make’
+	After completing this, run ‘mingw32-make install’.  This will install into C:/Projects/android-ndk-r16b/toolchains/arm-linux-androideabi-4.9/prebuilt/windows-x86_64/user/
+
+Hanglog integration, based on instructions in https://stackoverflow.com/questions/17767557/how-to-use-opencv-in-using-gradle/22427267#22427267
+
+	Create libraries folder in root of Hanglog3 directory
+	Copy C:/Projects/android-ndk-r16b/toolchains/arm-linux-androideabi-4.9/prebuilt/windows-x86_64/user/sdk/java into here and rename as opencv
+	Add build.gradle as below
+	Edit settings.gradle in app directory to remove existing opencv references, and add instead:
+		include ':libraries:opencv'
+	Delete "implementation project(path: ':opencv-contrib')" from in app's build.gradle
+
+	Start Android Studio and open HangLog3 apk then ...
+		Tools > SDK Manager > SDK Tools tab and select NMake (side by side) and CMake, then OK and accept the download (not needed actually)
+		Tools > SDK Manager and install API 27
+
+	Apply latest Updates
+	
+	Right click on project, then "open module settings", choose modules and then click on app.  Then click on dependencies tab and then + to add new dependency, select "module dependency" and ":libraries:opencv".  Click OK.
+	
+	Create a jniLibs folder in the /app/src/main/ location
+	Copy *.so from C:\Projects\android-ndk-r16b\toolchains\arm-linux-androideabi-4.9\prebuilt\windows-x86_64\user\sdk\ into here; i.e. the single one in C:\Projects\android-ndk-r16b\toolchains\arm-linux-androideabi-4.9\prebuilt\windows-x86_64\user\sdk\native\libs\armeabi-v7a
+
+	
+R. Hunt
+12/12/19
+
+
+
+===
+
+apply plugin: 'android-library'
+
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:0.9.+'
+    }
+}
+
+android {
+    compileSdkVersion 26
+
+    defaultConfig {
+        minSdkVersion 21
+        targetSdkVersion 26
+    }
+
+    sourceSets {
+        main {
+            manifest.srcFile 'AndroidManifest.xml'
+            java.srcDirs = ['src']
+            resources.srcDirs = ['src']
+            res.srcDirs = ['res']
+            aidl.srcDirs = ['src']
+        }
+    }
+}
