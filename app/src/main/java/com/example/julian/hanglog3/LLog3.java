@@ -1,6 +1,8 @@
 package com.example.julian.hanglog3;
 
 // OpenCV installation done using instructions at https://medium.com/@sukritipaul005/a-beginners-guide-to-installing-opencv-android-in-android-studio-ea46a7b4f2d3
+// Place to download the OpenCV with Aruco contrib is explained here: https://answers.opencv.org/question/197280/how-do-i-properly-build-android-opencv-from-sources/?answer=197471#post-id-197471
+// and this is the directory of nightly builds: https://pullrequest.opencv.org/buildbot/export/opencv_releases/master-contrib_pack-contrib-android/
 
 import android.app.Notification;
 import android.app.NotificationManager;
@@ -170,7 +172,7 @@ public class LLog3 extends AppCompatActivity {
             }
         });
 
-        epicwords.setText("yeep\n");
+        epicwords.setText("yeep UBv2020-06-01\n");
     }
 
     float ang = 0;

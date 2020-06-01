@@ -30,6 +30,7 @@ import java.util.List;
 import java.util.Queue;
 import java.util.TimeZone;
 
+/* This file is mis-labelled.  There is no UDP in use.  It's only TCP sockets */
 
 /* Python code for pulling in data off the phone
 import socket
@@ -234,11 +235,99 @@ class SocketServerThread extends Thread {
     }
 }
 
+class UBXstreaminfo {
+    int bytesP = 0;    // count of bytes
+    int bytesPD = 0;   // set to zero when non-zero byte received (used to colour the output and show non-null data is flowing)
+    int N = 2048;
+    char letter;
+    byte[] circbuff = new byte[N];
+    int Nstart = 0;
+    int Nend = 0;
+    int slippedubxbytes = 0;
+    int ngoodsatellites = 0;
+    int nSVINFOrecs = 0;
 
+    UBXstreaminfo(char lletter) { letter = lletter; }
+    void resetubxstreaminfo() {
+        bytesP = 0;
+        bytesPD = 0;
+        nSVINFOrecs = 0;
+        ngoodsatellites = 0;
+    }
+    int getbval(int i) {
+        return circbuff[(Nstart+i)%N]&0xFF;
+    }
+
+    void updateUBXparse(byte[] data, int leng) {
+        bytesP += leng;
+        for (int i = 0; i < leng; i++) {
+            if (data[i] != 0) {
+                bytesPD = 0;
+                break;
+            }
+        }
+        if (letter == '@')
+            return;
+
+        // append to the circular buffer
+        if (Nend + leng >= N) {
+            System.arraycopy(data, 0, circbuff, Nend, N - Nend);
+            Nend = leng - (N - Nend);
+            if (Nend != 0)
+                System.arraycopy(data, leng - Nend, circbuff, 0, Nend);
+            if (Nend >= Nstart) {
+                Log.i("hhanglogU", "ubx circular buffer overflow for "+letter);
+            }
+        } else {
+            System.arraycopy(data, 0, circbuff, Nend, leng);
+            Nend += leng;
+        }
+
+        // seek out and parse the next UBX record
+        while (true) {
+            int Nbytes = (Nstart <= Nend ? Nend - Nstart : N - Nstart + Nend);
+            if (Nbytes < 10)
+                break;
+            if (!((getbval(0) == 0xB5) && (getbval(1) == 0x62))) {
+                slippedubxbytes++;
+                Nstart = (Nstart + 1)%N;
+                continue;
+            }
+            int payloadlength = getbval(4) + getbval(5)*256;
+            if (payloadlength > N - 10) {
+                Log.i("hhanglogU", "ubx payload "+payloadlength+" too long, advancing for "+letter);
+                Nstart = (Nstart + 1)%N;
+                continue;
+            }
+            if (Nbytes < payloadlength + 8)
+                break;
+
+            if (slippedubxbytes != 0) {
+                Log.i("hhanglogU", "ubx circular buffer slipped "+slippedubxbytes+" bytes");
+                slippedubxbytes = 0;
+            }
+
+            // parse UBX-NAV-SVINFO to count good satellites
+            if ((getbval(2) == 0x01) && (getbval(3) == 0x30)) {
+                int lngoodsatellites = 0;
+                for (int i = 11; i < payloadlength; i += 12) {
+                    if ((getbval(6+i-3) != 0xFF) && ((getbval(6+i) & 0x0F) >= 5))
+                        lngoodsatellites++;
+                }
+                ngoodsatellites = lngoodsatellites;
+                nSVINFOrecs++;
+                Log.i("hhanglogU", "ubx ngoodsatellites "+ngoodsatellites);
+            }
+            Nstart = (Nstart + payloadlength + 8)%N;
+        }
+    }
+}
 
 class RecUDP extends Service {
-    int[] ubxbytesP = {0, 0, 0, 0};
-    int[] ubxbytesPD = {0, 0, 0, 0};
+    UBXstreaminfo[] ubxstreaminfos = { new UBXstreaminfo('@'),
+                                       new UBXstreaminfo('A'),
+                                       new UBXstreaminfo('B'),
+                                       new UBXstreaminfo('C') };
 
     long mstamp0 = 0;
     int fostreamlinesP = 0;
@@ -298,10 +387,10 @@ class RecUDP extends Service {
         fdataUBX[3] = new File(ddir, fname + "C.ubx");
         fostreamlinesP = 0;
         fostreamlines = 0;
-        ubxbytesP[0] = 0;
-        ubxbytesP[1] = 0;
-        ubxbytesP[2] = 0;
-        ubxbytesP[3] = 0;
+        ubxstreaminfos[0].resetubxstreaminfo();
+        ubxstreaminfos[1].resetubxstreaminfo();
+        ubxstreaminfos[2].resetubxstreaminfo();
+        ubxstreaminfos[3].resetubxstreaminfo();
 
         try {
             ddir.mkdirs();
@@ -357,7 +446,7 @@ class RecUDP extends Service {
 
         ubxIddsocketup = 0;
         for (int i = 1; i <= 3; i++) {
-            if (ubxbytesP[i] != 0)
+            if (ubxstreaminfos[i].bytesP != 0)
                 ubxIddsocketup = i;
         }
         return String.format("uploading ubx%d to %s:%d", ubxIddsocketup, ddhost, ddport);
@@ -446,7 +535,7 @@ class RecUDP extends Service {
     // this is where we separate out multiple UBX streams from different ipnumbers
     public void writefostreamUBX(int ubxI, byte[] data, int leng) throws IOException {
         try {
-        if ((fdataUBX[ubxI] != null) && (fostreamUBX[ubxI] == null) && (ubxbytesP[ubxI] == 0))
+        if ((fdataUBX[ubxI] != null) && (fostreamUBX[ubxI] == null) && (ubxstreaminfos[ubxI].bytesP == 0))
             fostreamUBX[ubxI] = new FileOutputStream(fdataUBX[ubxI]);
         } catch (FileNotFoundException e) {
             Log.i("hhanglogFFu", String.valueOf(e));
@@ -461,13 +550,7 @@ class RecUDP extends Service {
         if (ubxI == ubxIddsocketup)
             forwardtoDDSocket(data, leng);
 
-        ubxbytesP[ubxI] += leng;
-        for (int i = 0; i < leng; i++) {
-            if (data[i] != 0) {   // reset to green colour only if there is a non-zero byte to warn against empty data being returned.
-                ubxbytesPD[ubxI] = 0;
-                break;
-            }
-        }
+        ubxstreaminfos[ubxI].updateUBXparse(data, leng);
 
         forwardtoPCsockets(ubxI, data, leng);
     }
@@ -520,12 +603,10 @@ class RecUDP extends Service {
                             llog3.epicipnumubx[i].setText(llog3.lepicipnumubx[i]);
                             llog3.lepicipnumubx[i] = null;
                         }
-                        if (llog3.lepiccountubxPCmsgs[i] == 0)
-                            llog3.epicubxbytes[i].setText(String.format("UBX(%d)", ubxbytesP[i]));
-                        else
-                            llog3.epicubxbytes[i].setText(String.format("UBX(%d)%d", ubxbytesP[i], llog3.lepiccountubxPCmsgs[i]));
-                        llog3.epicubxbytes[i].setBackgroundColor(ubxbytesPD[i] <= 3 ? 0xFFCCFFCC : 0xFFFFCCCC);
-                        ubxbytesPD[i]++;
+                        String spc = (llog3.lepiccountubxPCmsgs[i] != 0 ? String.valueOf(llog3.lepiccountubxPCmsgs[i]) : "");
+                        llog3.epicubxbytes[i].setText(String.format("UBX(%d#%d)%s", ubxstreaminfos[i].nSVINFOrecs, ubxstreaminfos[i].ngoodsatellites, spc));
+                        llog3.epicubxbytes[i].setBackgroundColor(ubxstreaminfos[i].bytesPD <= 3 ? 0xFFCCFFCC : 0xFFFFCCCC);
+                        ubxstreaminfos[i].bytesPD++;
                     }
                 }
             });
