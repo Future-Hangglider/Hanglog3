@@ -13,6 +13,7 @@ import android.util.Log;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -79,8 +80,8 @@ class SocketServerReplyThread extends Thread {
             int h3 = inputStream.read();
             Log.i("hhanglogX", String.format("thread%d socket incoming bytes %x %x %x %x", threadcount, h0&0xFF, h1&0xFF, h2&0xFF, h3&0xFF));
 
-            // connection from ESP32 with data; @ABC
-            // (incoming data loop)
+            // connection from ESP32 with data header line AAAA, BBBB, CCCC, or @@@@
+            // enters this loop
             if ((h0 == h1) && (h0 == h2) && (h0 == h3) && (h0 >= '@') && (h0 <= 'C')) {
                 ubxI = h0 - '@';
                 ubxILetter = (char)h0;
@@ -94,6 +95,7 @@ class SocketServerReplyThread extends Thread {
                 byte[] buff = new byte[1000];
                 StringBuffer sb0 = (ubxI == 0 ? new StringBuffer() : null);
 
+                // this is the receiving stream loop
                 while (true) {
                     int x = inputStream.read(buff);
                     if (x != -1) {
@@ -112,11 +114,11 @@ class SocketServerReplyThread extends Thread {
                         }
                         sleep(10);
                     }
-
                 }
 
-            // connection in from PC wanting data to be forwarded to it (may be multiple connections)
-            // (outgoing data handover)
+            // connection in from PC with header -AAA, -BBB, -CCC, -@@@
+            // wanting data to be forwarded (may be multiple connections)
+            // socket is handed over to pcforwardsockets
             } else if ((h0 == '-') && (h1 == h2) && (h1 == h3) && (h1 >= '@') && (h1 <= 'C')) {
                 int subxI = h1 - '@';
                 Log.i("hhanglogX pcforward", String.format("thread %d ubxI %d", threadcount, subxI));
@@ -142,8 +144,8 @@ class SocketServerReplyThread extends Thread {
                 hostThreadSocket = null;
                 return;  // note shortcut out due to hand-over of socket to an array of outputs (so thread no longer needed)
 
-            // connection from PC wanting to forward signals to the ESP device
-            // (message from PC to ESP loop)
+            // connection from PC with header +AAA, +BBB, +CCC, or +@@@
+            // wanting to forward signals to the ESP device (eg to flash an led)
             } else if ((h0 == '+') && (h1 == h2) && (h1 == h3) && (h1 >= '@') && (h1 <= 'C')) {
                 int subxI = h1 - '@';
 
@@ -156,6 +158,8 @@ class SocketServerReplyThread extends Thread {
                     espoutputStream.write((String.format("Hello from Android msg relay %d\n", subxI)).getBytes());
                     byte[] buff = new byte[1000];
                     llog3.lepiccountubxPCmsgs[subxI] = 1;
+
+                    // this is the read stream and forward loop
                     while (true) {
                         int x = pcinputStream.read(buff);
                         if (x != -1) {
@@ -165,6 +169,8 @@ class SocketServerReplyThread extends Thread {
                         }
                         sleep(10);
                     }
+
+                // Unrecognized header instruction in socket connection
                 } else {
                     Log.i("hhanglogX pcmessage nohostsocket", String.format("thread %d ubxI %d", threadcount, subxI));
                     if (llog3.lepiccountubxPCmsgs[subxI] >= 0)
@@ -172,6 +178,59 @@ class SocketServerReplyThread extends Thread {
                     else
                         llog3.lepiccountubxPCmsgs[subxI]--;
                 }
+
+            // connection from PC with header -DRL (list), -DRE (erase), -DRR (read)
+            // to fetch data from the files written by the app so we don't have to connect USB wires
+            } else if ((h0 == '-') && (h1 == 'D') && (h2 == 'R') && ((h3 == 'L') || (h3 == 'E') || (h3 == 'R'))) {
+
+                Log.i("hhanglogX pcmessage", String.format("thread %d -DR %c", threadcount, h3));
+                //llog3.lepiccountubxPCmsgs[subxI] += 10;
+
+                // annoying low-level code to extract a space delimeted string which will be the filename
+                // An alternative would be to find a library that implements the whole ftp/http protocol, which might not be easier.
+                char[] buff = new char[1001];
+                int N = 0;
+                buff[0] = (char)inputStream.read();
+                while ((buff[0] == ' ') || (buff[0] == '\n'))
+                    buff[0] = (char)inputStream.read();
+                while ((buff[N] != ' ') && (buff[N] != '\n') && (buff[N] != 0) && (N < 1000))
+                    buff[++N] = (char)inputStream.read();
+                String fname = String.valueOf(buff, 0, N);
+                Log.i("hhanglogX pcmessage", String.format("filename '%s'", fname));
+
+                File ffile = new File(Environment.getExternalStorageDirectory(), fname);
+
+                if (!fname.startsWith("hanglog")) {
+                    outputStream.write(String.format("Only allowed in 'hanglog' directory\n").getBytes());
+                } else if (h3 == 'L') {
+                    outputStream.write((String.format("List '%s'\n", ffile.toString())).getBytes());
+                    File[] flist = ffile.listFiles();
+                    for (int i = 0; i < flist.length; i++)
+                        outputStream.write(String.format("%s\n", flist[i].getName()).getBytes());
+                    outputStream.write(String.format(".\n").getBytes());
+                } else if (h3 == 'E') {
+                    outputStream.write((String.format("You asked erase '%s'\n", fname)).getBytes());
+                    if (ffile.delete())
+                        outputStream.write((String.format("Erased '%s'\n", fname)).getBytes());
+                    else
+                        outputStream.write((String.format("Delete failed\n")).getBytes());
+                } else if (h3 == 'R') {
+                    long fleng = ffile.length();
+                    Log.i("hhanglogU", String.format("sending %d bytes", fleng));
+                    outputStream.write((String.format("%d\n", fleng)).getBytes());
+                    FileInputStream fin = new FileInputStream(ffile);
+                    byte[] sbuff = new byte[1000];
+                    while (fleng > 0) {
+                        int rn = fin.read(sbuff);
+                        outputStream.write(sbuff, 0, rn);
+                        fleng -= rn;
+                        sleep(10);
+                    }
+                }
+
+            // Unrecognized header instruction in socket connection
+            } else {
+                outputStream.write((String.format("Unrecognized header instructions\n")).getBytes());
             }
 
         } catch (IOException e) {
@@ -235,6 +294,10 @@ class SocketServerThread extends Thread {
     }
 }
 
+// We could move the rest of the 4x multiple data in RecUDP to here.
+// Also could use the bytesPD's trick on satellite ID (there's only 255 of them)
+// to count only those that have been available for the last 15 seconds,
+// so we are not substituting one satellite for another, which may cause a glitch.
 class UBXstreaminfo {
     int bytesP = 0;    // count of bytes
     int bytesPD = 0;   // set to zero when non-zero byte received (used to colour the output and show non-null data is flowing)
@@ -373,7 +436,7 @@ class RecUDP extends Service {
         TimeZone timeZoneUTC = TimeZone.getTimeZone("UTC");
         Calendar rightNow = Calendar.getInstance(timeZoneUTC);
 
-        SimpleDateFormat ddsdf = new SimpleDateFormat("yyyyMMddHHmmss");
+        SimpleDateFormat ddsdf = new SimpleDateFormat("'dd_'yyyyMMddHHmmss");
         ddsdf.setTimeZone(timeZoneUTC);
         File ddir = new File(fdir, ddsdf.format(rightNow.getTime()));
         //String currentDateandTime = new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new Date());
