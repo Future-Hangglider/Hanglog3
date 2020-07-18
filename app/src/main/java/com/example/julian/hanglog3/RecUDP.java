@@ -198,27 +198,27 @@ class SocketServerReplyThread extends Thread {
                 String fname = String.valueOf(buff, 0, N);
                 Log.i("hhanglogX pcmessage", String.format("filename '%s'", fname));
 
-                File ffile = new File(Environment.getExternalStorageDirectory(), fname);
+                File ffiledir = new File(Environment.getExternalStorageDirectory(), fname);
 
                 if (!fname.startsWith("hanglog")) {
                     outputStream.write(String.format("Only allowed in 'hanglog' directory\n").getBytes());
                 } else if (h3 == 'L') {
-                    outputStream.write((String.format("List '%s'\n", ffile.toString())).getBytes());
-                    File[] flist = ffile.listFiles();
+                    outputStream.write((String.format("List '%s'\n", ffiledir.toString())).getBytes());
+                    File[] flist = ffiledir.listFiles();
                     for (int i = 0; i < flist.length; i++)
                         outputStream.write(String.format("%s\n", flist[i].getName()).getBytes());
                     outputStream.write(String.format(".\n").getBytes());
                 } else if (h3 == 'E') {
                     outputStream.write((String.format("You asked erase '%s'\n", fname)).getBytes());
-                    if (ffile.delete())
+                    if (ffiledir.delete())
                         outputStream.write((String.format("Erased '%s'\n", fname)).getBytes());
                     else
                         outputStream.write((String.format("Delete failed\n")).getBytes());
                 } else if (h3 == 'R') {
-                    long fleng = ffile.length();
+                    long fleng = ffiledir.length();
                     Log.i("hhanglogU", String.format("sending %d bytes", fleng));
                     outputStream.write((String.format("%d\n", fleng)).getBytes());
-                    FileInputStream fin = new FileInputStream(ffile);
+                    FileInputStream fin = new FileInputStream(ffiledir);
                     byte[] sbuff = new byte[1000];
                     while (fleng > 0) {
                         int rn = fin.read(sbuff);
@@ -308,6 +308,9 @@ class UBXstreaminfo {
     int Nend = 0;
     int slippedubxbytes = 0;
     int ngoodsatellites = 0;
+    String msgstring = "";
+    StringBuilder sbmsgstring = new StringBuilder();
+    int msgstringsincecount = 0;
     int nSVINFOrecs = 0;
 
     UBXstreaminfo(char lletter) { letter = lletter; }
@@ -380,7 +383,18 @@ class UBXstreaminfo {
                 ngoodsatellites = lngoodsatellites;
                 nSVINFOrecs++;
                 Log.i("hhanglogU", "ubx ngoodsatellites "+ngoodsatellites);
+
+            // parse UBX-msg to get battery output
+            } else if ((getbval(2) == 0x21) && (getbval(3) == 0x04)) {
+                sbmsgstring.setLength(0);
+                for (int i = 0; i < payloadlength; i++)
+                    sbmsgstring.append((char)getbval(6+i));
+                msgstring = sbmsgstring.toString();
+                msgstringsincecount = 0;
+                Log.i("hhanglogU", "ubx msgstring "+msgstring);
             }
+
+
             Nstart = (Nstart + payloadlength + 8)%N;
         }
     }
@@ -436,7 +450,7 @@ class RecUDP extends Service {
         TimeZone timeZoneUTC = TimeZone.getTimeZone("UTC");
         Calendar rightNow = Calendar.getInstance(timeZoneUTC);
 
-        SimpleDateFormat ddsdf = new SimpleDateFormat("'dd_'yyyyMMddHHmmss");
+        SimpleDateFormat ddsdf = new SimpleDateFormat("'dd_'yyyy_MM_dd_HHmmss");
         ddsdf.setTimeZone(timeZoneUTC);
         File ddir = new File(fdir, ddsdf.format(rightNow.getTime()));
         //String currentDateandTime = new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new Date());
@@ -666,7 +680,13 @@ class RecUDP extends Service {
                             llog3.epicipnumubx[i].setText(llog3.lepicipnumubx[i]);
                             llog3.lepicipnumubx[i] = null;
                         }
+
                         String spc = (llog3.lepiccountubxPCmsgs[i] != 0 ? String.valueOf(llog3.lepiccountubxPCmsgs[i]) : "");
+                        if (ubxstreaminfos[i].msgstring.length() > 9) {// battvolt=%4.2fv
+                            spc = ubxstreaminfos[i].msgstring.substring(9);
+                            if (ubxstreaminfos[i].msgstringsincecount++ > 90)
+                                ubxstreaminfos[i].msgstring = "";
+                        }
                         llog3.epicubxbytes[i].setText(String.format("UBX(%d#%d)%s", ubxstreaminfos[i].nSVINFOrecs, ubxstreaminfos[i].ngoodsatellites, spc));
                         llog3.epicubxbytes[i].setBackgroundColor(ubxstreaminfos[i].bytesPD <= 3 ? 0xFFCCFFCC : 0xFFFFCCCC);
                         ubxstreaminfos[i].bytesPD++;
