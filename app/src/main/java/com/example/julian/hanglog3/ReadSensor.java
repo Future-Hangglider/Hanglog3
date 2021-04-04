@@ -78,7 +78,7 @@ class ReadSensor implements SensorEventListener, LocationListener {
         if (evt.sensor.getType() == Sensor.TYPE_ROTATION_VECTOR)
             phonesensorrep = String.format("aZt%08Xx%04Xy%04Xz%04X\n", tstamp, ((int)(evt.values[0]*32768))&0xFFFF, ((int)(evt.values[1]*32768))&0xFFFF, ((int)(evt.values[2]*32768))&0xFFFF);
         else if (evt.sensor.getType() == Sensor.TYPE_ACCELEROMETER)
-            phonesensorrep = String.format("aAt%08Xx%04Xy%04Xz%04X\n", tstamp, ((int)(evt.values[0]*32768))&0xFFFF, ((int)(evt.values[1]*32768))&0xFFFF, ((int)(evt.values[2]*32768))&0xFFFF);
+            phonesensorrep = String.format("aAt%08Xx%04Xy%04Xz%04X\n", tstamp, ((int)(evt.values[0]*100))&0xFFFF, ((int)(evt.values[1]*100))&0xFFFF, ((int)(evt.values[2]*100))&0xFFFF);
         else if (evt.sensor.getType() == Sensor.TYPE_PRESSURE)
             phonesensorrep = String.format("aFt%08Xp%06X\n", tstamp, ((int)(evt.values[0]*100))&0xFFFFFF);
         if ((phonesensorrep != null) && (phonesensorqueue.size() < phonesensorqueuesizelimit))

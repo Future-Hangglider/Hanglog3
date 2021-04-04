@@ -1,6 +1,7 @@
 package com.example.julian.hanglog3;
 
 import android.graphics.Bitmap;
+import android.util.ArrayMap;
 import android.util.Log;
 
 import java.util.regex.Matcher;
@@ -18,6 +19,8 @@ public class CurrentPos {
     public double nyfac = 0.0, exfac = 0.0;
     public double xpos = 0.0, ypos = 0.0, alt = -999.0;
     public double xposA = 0.0, yposA = 0.0, altA = -999.0;
+    public ArrayMap<Character, Integer> datacount = new ArrayMap<Character, Integer>();
+    StringBuilder sb = new StringBuilder();
 
     public Bitmap cameraview = null;
 
@@ -37,7 +40,25 @@ public class CurrentPos {
         return (j < 32768 ? j : j - 65536);
     }
 
+    public String showdatacount() {
+        sb.setLength(0);
+        for (ArrayMap.Entry<Character, Integer> e : datacount.entrySet()) {
+            e.getKey();
+            sb.append(e.getKey());
+            sb.append(':');
+            sb.append(e.getValue());
+            sb.append(' ');
+        }
+        return sb.toString();
+    }
+
+
     public void processPos(byte[] data, int leng) {
+        if ((leng >= 2) && (data[0] != 'a')) {
+            char k = (char)(data[0]);
+            datacount.put(k, datacount.getOrDefault(k, 0)+1);
+        }
+
         // "Zt00000000x0000y0000z0000a0000b0000c0000w0000x0000y0000z0000s00\n"
         if (data[0] == 'Z') {
             double q0 = s4(data, 41);

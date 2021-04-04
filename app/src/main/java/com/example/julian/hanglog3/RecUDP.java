@@ -659,7 +659,8 @@ class RecUDP extends Service {
         if ((mstamp > mstamp0)) {
             final String dstringP = (dataP != null ? new String(dataP, 0, lengP) : null);
             dataP = null;
-            final String dstringE = (dataE != null ? new String(dataE, 0, lengE) : null);
+            //final String dstringE = (dataE != null ? new String(dataE, 0, lengE) : null);
+            final String dstringE = (dataE != null ? llog3.cpos.showdatacount() : null);
             dataE = null;
 
             llog3.runOnUiThread(new Runnable() { // need to run settext on main UI thread only

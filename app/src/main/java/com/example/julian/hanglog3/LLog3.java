@@ -172,7 +172,7 @@ public class LLog3 extends AppCompatActivity {
             }
         });
 
-        epicwords.setText("yeep UBv2020-06-01\n");
+        epicwords.setText("yeep UBv2021-04-04\n");
     }
 
     float ang = 0;
